@@ -52,11 +52,21 @@ npm run deploy
 
 公開後 `https://<project-id>.web.app` でアクセスできます。詳しい手順は [docs/デプロイ手順.md](docs/デプロイ手順.md) を参照。
 
+## 実装済み機能（MVP コア）
+
+- 🔐 ログイン / 新規登録（メール＋パスワード, Firebase Authentication）
+- ✍️ 成績の入力 → Firestore に保存（本人のみアクセス可能）
+- 📈 科目別の成績推移グラフ（得点率・目標ライン）／記録一覧・削除
+
 ## 主なファイル
 
+- [`src/components/Login.tsx`](src/components/Login.tsx) — ログイン / 新規登録画面
 - [`src/components/Dashboard.tsx`](src/components/Dashboard.tsx) — ダッシュボード（ホーム画面）
-- [`src/components/GradeChart.tsx`](src/components/GradeChart.tsx) — 成績グラフ（重ね合わせ・目標ライン）
+- [`src/components/GradeForm.tsx`](src/components/GradeForm.tsx) — 成績入力フォーム
+- [`src/components/GradeChart.tsx`](src/components/GradeChart.tsx) — 成績グラフ（得点率・目標ライン）
 - [`src/lib/firebase.ts`](src/lib/firebase.ts) — Firebase 初期化（Auth / Firestore / Storage）
+- [`src/lib/auth.tsx`](src/lib/auth.tsx) — 認証状態の管理（AuthProvider / useAuth）
+- [`src/lib/grades.ts`](src/lib/grades.ts) — テスト結果の保存・購読・削除（Firestore）
 - [`tailwind.config.js`](tailwind.config.js) — スカイブルー・テーマのデザイントークン
 - [`firebase.json`](firebase.json) / [`firestore.rules`](firestore.rules) / [`storage.rules`](storage.rules) — Firebase 設定とセキュリティルール
 

@@ -8,39 +8,44 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    // 既存ドキュメントの所有者が本人か（read / update / delete 用）
+    function ownsExisting() {
+      return isSignedIn() && resource.data.owner == request.auth.uid;
+    }
+
+    // 新規/更新後のドキュメントの所有者が本人か（create / update 用）
+    function ownsIncoming() {
+      return isSignedIn() && request.resource.data.owner == request.auth.uid;
     }
 
     // プロフィール: 本人のみ
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // ユーザーごとの学習データ（成績・勉強記録・提出物・弱点ログ等）
-    // ドキュメントに owner フィールドを持たせ、本人のみアクセス可能にする。
+    // ユーザーごとの学習データ（owner フィールドで本人に限定）
     match /testResults/{docId} {
-      allow read, write: if isSignedIn()
-        && request.resource.data.owner == request.auth.uid
-        || (resource != null && resource.data.owner == request.auth.uid);
+      allow read, delete: if ownsExisting();
+      allow create: if ownsIncoming();
+      allow update: if ownsExisting() && ownsIncoming();
     }
 
     match /studyLogs/{docId} {
-      allow read, write: if isSignedIn()
-        && (request.resource.data.owner == request.auth.uid
-            || (resource != null && resource.data.owner == request.auth.uid));
+      allow read, delete: if ownsExisting();
+      allow create: if ownsIncoming();
+      allow update: if ownsExisting() && ownsIncoming();
     }
 
     match /assignments/{docId} {
-      allow read, write: if isSignedIn()
-        && (request.resource.data.owner == request.auth.uid
-            || (resource != null && resource.data.owner == request.auth.uid));
+      allow read, delete: if ownsExisting();
+      allow create: if ownsIncoming();
+      allow update: if ownsExisting() && ownsIncoming();
     }
 
     match /wrongAnswers/{docId} {
-      allow read, write: if isSignedIn()
-        && (request.resource.data.owner == request.auth.uid
-            || (resource != null && resource.data.owner == request.auth.uid));
+      allow read, delete: if ownsExisting();
+      allow create: if ownsIncoming();
+      allow update: if ownsExisting() && ownsIncoming();
     }
 
     // フレンド: 申請者か被申請者のみが読み書きできる

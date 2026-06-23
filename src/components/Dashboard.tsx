@@ -1,11 +1,10 @@
+import { useEffect, useMemo, useState } from 'react';
 import { GradeChart, type GradePoint } from './GradeChart';
+import GradeForm, { SUBJECTS } from './GradeForm';
+import { useAuth, logout } from '../lib/auth';
+import { watchResults, removeResult, type TestResult } from '../lib/grades';
 
-const sampleGrades: GradePoint[] = [
-  { test: '4月', math: 62, target: 70 },
-  { test: '中間', math: 68, target: 70 },
-  { test: '期末', math: 74, target: 70 },
-  { test: '夏模試', math: 71, target: 75 },
-];
+const pct = (score: number, max: number) => (max > 0 ? Math.round((score / max) * 100) : 0);
 
 function StatCard({
   label,
@@ -30,88 +29,146 @@ function StatCard({
   );
 }
 
-function QuickAction({
-  label,
-  emoji,
-  primary = false,
-}: {
-  label: string;
-  emoji: string;
-  primary?: boolean;
-}) {
-  return (
-    <button
-      className={`flex flex-1 flex-col items-center gap-1 rounded-card px-3 py-4 text-sm font-bold transition active:scale-95 ${
-        primary
-          ? 'bg-accent text-white shadow-card'
-          : 'bg-white text-main shadow-card hover:bg-sky-50'
-      }`}
-    >
-      <span className="text-2xl">{emoji}</span>
-      {label}
-    </button>
-  );
-}
-
-/** ダッシュボード（ホーム画面）— スカイブルー・テーマ / 角丸16px */
 export default function Dashboard() {
+  const { user } = useAuth();
+  const [results, setResults] = useState<TestResult[]>([]);
+  const [subject, setSubject] = useState<string>(SUBJECTS[1]);
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    return watchResults(user.uid, setResults);
+  }, [user]);
+
+  const subjectResults = useMemo(
+    () => results.filter((r) => r.subject === subject),
+    [results, subject],
+  );
+
+  const chartData: GradePoint[] = subjectResults.map((r) => ({
+    label: r.testName,
+    score: pct(r.score, r.maxScore),
+    target: r.targetScore != null ? pct(r.targetScore, r.maxScore) : null,
+  }));
+
+  // サマリー指標（実データから算出）
+  const latest = subjectResults[subjectResults.length - 1];
+  const latestPct = latest ? pct(latest.score, latest.maxScore) : null;
+  const targetPct = latest?.targetScore != null ? pct(latest.targetScore, latest.maxScore) : null;
+  const achieve = latestPct != null && targetPct != null ? Math.round((latestPct / targetPct) * 100) : null;
+
   return (
     <div className="min-h-screen bg-base font-sans text-slate-800">
       {/* ヘッダー: スカイブルーのグラデーション */}
       <header className="rounded-b-[28px] bg-gradient-to-br from-main to-sky-400 px-5 pb-8 pt-6 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm/relaxed opacity-90">こんにちは、ハルトさん 👋</p>
-            <h1 className="font-display text-xl font-bold">今日もコツコツいこう！</h1>
+            <p className="text-sm/relaxed opacity-90">こんにちは 👋</p>
+            <h1 className="font-display text-xl font-bold">{user?.email ?? 'ゲスト'}</h1>
           </div>
-          <button className="relative rounded-full bg-white/20 p-2" aria-label="通知">
-            🔔
-            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-main" />
+          <button
+            onClick={() => logout()}
+            className="rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold"
+          >
+            ログアウト
           </button>
         </div>
       </header>
 
-      <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-24">
+      <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-28">
         {/* サマリーカード */}
         <section className="grid grid-cols-3 gap-3">
-          <StatCard label="今週の勉強" value="4.5" unit="h" tone="main" />
-          <StatCard label="次の提出物" value="2" unit="日後" tone="accent" />
-          <StatCard label="目標達成" value="95" unit="%" tone="success" />
+          <StatCard label="登録テスト" value={String(results.length)} unit="件" tone="main" />
+          <StatCard
+            label={`直近(${subject})`}
+            value={latestPct != null ? String(latestPct) : '—'}
+            unit={latestPct != null ? '%' : ''}
+            tone="accent"
+          />
+          <StatCard
+            label="目標達成"
+            value={achieve != null ? String(Math.min(achieve, 999)) : '—'}
+            unit={achieve != null ? '%' : ''}
+            tone="success"
+          />
         </section>
 
-        {/* AIアドバイス */}
-        <section className="rounded-card bg-white p-4 shadow-card">
-          <div className="flex items-start gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-sky-100 text-lg">
-              🤖
-            </span>
-            <div>
-              <p className="text-xs font-bold text-main">AIからのひとこと</p>
-              <p className="mt-0.5 text-sm leading-relaxed">
-                数学の<b>二次関数</b>で昨日3問ミスがありました。10分の弱点テストで定着させよう！
-              </p>
-            </div>
-          </div>
+        {/* 科目セレクター */}
+        <section className="flex flex-wrap gap-2">
+          {SUBJECTS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSubject(s)}
+              className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
+                subject === s ? 'bg-main text-white shadow-card' : 'bg-white text-main shadow-card'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
         </section>
 
         {/* 成績グラフ */}
         <section className="rounded-card bg-white p-4 shadow-card">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-display text-sm font-bold">数学の成績推移</h2>
-            <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-bold text-success">
-              +12点 ↑
-            </span>
+            <h2 className="font-display text-sm font-bold">{subject}の成績推移（得点率）</h2>
           </div>
-          <GradeChart data={sampleGrades} />
+          {chartData.length === 0 ? (
+            <div className="grid h-52 place-items-center text-center text-sm text-slate-400">
+              <div>
+                <p className="mb-2 text-3xl">📈</p>
+                まだ{subject}の記録がありません。
+                <br />
+                「成績を追加」から登録しよう！
+              </div>
+            </div>
+          ) : (
+            <GradeChart data={chartData} subjectName={subject} />
+          )}
         </section>
 
-        {/* クイックアクション */}
-        <section className="flex gap-3">
-          <QuickAction label="勉強開始" emoji="⏱️" />
-          <QuickAction label="答案を登録" emoji="📷" primary />
-          <QuickAction label="テスト対策" emoji="📝" />
-        </section>
+        {/* 記録リスト */}
+        {subjectResults.length > 0 && (
+          <section className="rounded-card bg-white p-4 shadow-card">
+            <h2 className="mb-2 font-display text-sm font-bold">{subject}の記録</h2>
+            <ul className="divide-y divide-slate-100">
+              {[...subjectResults].reverse().map((r) => (
+                <li key={r.id} className="flex items-center justify-between py-2.5 text-sm">
+                  <div>
+                    <p className="font-bold">{r.testName}</p>
+                    <p className="text-xs text-slate-400">{r.testDate}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-display font-bold text-main">
+                      {r.score}
+                      <span className="text-xs text-slate-400">/{r.maxScore}</span>
+                    </span>
+                    <button
+                      onClick={() => removeResult(r.id)}
+                      aria-label="削除"
+                      className="text-slate-300 hover:text-accent"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </main>
+
+      {/* 追加ボタン（FAB） */}
+      <button
+        onClick={() => setShowForm(true)}
+        className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full bg-accent px-6 py-3 text-sm font-bold text-white shadow-card transition active:scale-95"
+      >
+        ＋ 成績を追加
+      </button>
+
+      {showForm && user && (
+        <GradeForm uid={user.uid} defaultSubject={subject} onClose={() => setShowForm(false)} />
+      )}
     </div>
   );
 }
