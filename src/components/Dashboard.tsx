@@ -53,7 +53,7 @@ function QuickAction({
   );
 }
 
-/** ダッシュボード（ホーム画面）プロトタイプ — スカイブルー・テーマ / 角丸16px */
+/** ダッシュボード（ホーム画面）— スカイブルー・テーマ / 角丸16px */
 export default function Dashboard() {
   return (
     <div className="min-h-screen bg-base font-sans text-slate-800">

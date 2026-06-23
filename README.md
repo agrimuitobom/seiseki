@@ -1,6 +1,6 @@
 # Seiseki（成績）
 
-小中高生向けの成績管理・学習支援Webアプリの設計書 / 実装ガイド。
+小中高生向けの成績管理・学習支援Webアプリ。React + Vite + Tailwind CSS、バックエンドは Firebase。
 
 > 「自分の弱点がわかる」「友達と楽しく競える」「AIが志望進路に合わせて伴走する」
 
@@ -13,19 +13,57 @@
 - 🎯 進路最適化・AIアドバイザー（成績からの逆算アドバイス）
 - 👥 ソーシャル（承認制フレンド、フレンド内ランキング）
 
+## 技術スタック
+
+| 用途 | 技術 |
+| --- | --- |
+| フロント | React 18 + Vite + TypeScript + Tailwind CSS |
+| グラフ | Recharts |
+| 認証 | Firebase Authentication |
+| DB | Cloud Firestore |
+| 画像保存（答案） | Firebase Cloud Storage |
+| 公開（ホスティング） | Firebase Hosting |
+
+## ローカルで動かす
+
+```bash
+npm install
+cp .env.example .env.local   # Firebase の設定値を記入
+npm run dev                  # http://localhost:5173
+```
+
+`.env.local` の値は Firebase コンソール → プロジェクト設定 → 「マイアプリ」から取得します。
+
+## Firebase にデプロイ
+
+```bash
+# 1. Firebase CLI（未インストールなら）
+npm install -g firebase-tools
+
+# 2. Google アカウントでログイン
+firebase login
+
+# 3. .firebaserc の "your-project-id" を実際のプロジェクトIDに書き換える
+#    （または `firebase use --add` で対話的に選択）
+
+# 4. ビルドして公開（build + firebase deploy をまとめて実行）
+npm run deploy
+```
+
+公開後 `https://<project-id>.web.app` でアクセスできます。詳しい手順は [docs/デプロイ手順.md](docs/デプロイ手順.md) を参照。
+
+## 主なファイル
+
+- [`src/components/Dashboard.tsx`](src/components/Dashboard.tsx) — ダッシュボード（ホーム画面）
+- [`src/components/GradeChart.tsx`](src/components/GradeChart.tsx) — 成績グラフ（重ね合わせ・目標ライン）
+- [`src/lib/firebase.ts`](src/lib/firebase.ts) — Firebase 初期化（Auth / Firestore / Storage）
+- [`tailwind.config.js`](tailwind.config.js) — スカイブルー・テーマのデザイントークン
+- [`firebase.json`](firebase.json) / [`firestore.rules`](firestore.rules) / [`storage.rules`](storage.rules) — Firebase 設定とセキュリティルール
+
 ## ドキュメント
 
 - **[設計書 / 実装ガイド](docs/設計書.md)** — UI/UX、技術スタック、DB設計、ロードマップ
-
-## サンプルコード
-
-スカイブルー・テーマ（角丸16px）のプロトタイプ。
-
-- [`examples/tailwind.config.js`](examples/tailwind.config.js) — デザイントークン
-- [`examples/Dashboard.tsx`](examples/Dashboard.tsx) — ダッシュボード（ホーム画面）
-- [`examples/GradeChart.tsx`](examples/GradeChart.tsx) — 成績グラフ（重ね合わせ・目標ライン）
-
-依存: `react`, `recharts`, `tailwindcss`
+- **[デプロイ手順](docs/デプロイ手順.md)** — Firebase 公開の詳細ステップ
 
 ## デザインシステム（スカイブルー・テーマ）
 

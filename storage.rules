@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// 答案画像など: /answers/{userId}/... に本人のみ読み書き可能。
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /answers/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId
+        // 画像のみ・10MB まで
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // それ以外は全拒否
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

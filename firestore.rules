@@ -1,0 +1,60 @@
+rules_version = '2';
+
+// 未成年データ保護: ログイン必須＋「自分のデータしか読み書きできない」を基本とする。
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // プロフィール: 本人のみ
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ユーザーごとの学習データ（成績・勉強記録・提出物・弱点ログ等）
+    // ドキュメントに owner フィールドを持たせ、本人のみアクセス可能にする。
+    match /testResults/{docId} {
+      allow read, write: if isSignedIn()
+        && request.resource.data.owner == request.auth.uid
+        || (resource != null && resource.data.owner == request.auth.uid);
+    }
+
+    match /studyLogs/{docId} {
+      allow read, write: if isSignedIn()
+        && (request.resource.data.owner == request.auth.uid
+            || (resource != null && resource.data.owner == request.auth.uid));
+    }
+
+    match /assignments/{docId} {
+      allow read, write: if isSignedIn()
+        && (request.resource.data.owner == request.auth.uid
+            || (resource != null && resource.data.owner == request.auth.uid));
+    }
+
+    match /wrongAnswers/{docId} {
+      allow read, write: if isSignedIn()
+        && (request.resource.data.owner == request.auth.uid
+            || (resource != null && resource.data.owner == request.auth.uid));
+    }
+
+    // フレンド: 申請者か被申請者のみが読み書きできる
+    match /friendships/{docId} {
+      allow read, write: if isSignedIn()
+        && (request.auth.uid == resource.data.requester
+            || request.auth.uid == resource.data.addressee
+            || request.auth.uid == request.resource.data.requester
+            || request.auth.uid == request.resource.data.addressee);
+    }
+
+    // 既定では全拒否（上記以外のパスはアクセス不可）
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
