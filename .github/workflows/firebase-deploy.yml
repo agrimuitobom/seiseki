@@ -40,16 +40,12 @@ jobs:
           SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: printf '%s' "$SERVICE_ACCOUNT" > "${{ runner.temp }}/service-account.json"
 
-      - name: Deploy (Hosting + Firestore rules)
-        # storage はデプロイ対象から除外している。
-        # 理由: storage デプロイは firebasestorage.googleapis.com の有効化チェックに
-        # serviceusage 権限を要求するが、firebase-adminsdk サービスアカウントには無いため 403 になる。
-        # storage ルールは安定しているので、変更時のみ手動で
-        #   firebase deploy --only storage
-        # を実行する（または GCP IAM で Service Usage Consumer ロールを付与すれば CI でも可能）。
+      - name: Deploy (Hosting + Firestore/Storage rules)
+        # サービスアカウントに Service Usage Consumer ロールを付与済みのため、
+        # storage（firebasestorage API の有効化チェック）も CI から実行できる。
         run: >-
           npx firebase-tools deploy
-          --only hosting,firestore:rules
+          --only hosting,firestore:rules,storage
           --project seiseki-2a70c
           --non-interactive
         env:

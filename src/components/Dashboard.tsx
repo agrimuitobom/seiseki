@@ -75,7 +75,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-28">
+      <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-36">
         {/* サマリーカード */}
         <section className="grid grid-cols-3 gap-3">
           <StatCard label="登録テスト" value={String(results.length)} unit="件" tone="main" />
@@ -161,7 +161,7 @@ export default function Dashboard() {
       {/* 追加ボタン（FAB） */}
       <button
         onClick={() => setShowForm(true)}
-        className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full bg-accent px-6 py-3 text-sm font-bold text-white shadow-card transition active:scale-95"
+        className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 rounded-full bg-accent px-6 py-3 text-sm font-bold text-white shadow-card transition active:scale-95"
       >
         ＋ 成績を追加
       </button>
