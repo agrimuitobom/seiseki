@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GradeChart, type GradePoint } from './GradeChart';
+import { SubjectRadar } from './SubjectRadar';
 import GradeForm from './GradeForm';
 import { useAuth, logout } from '../lib/auth';
 import { useProfile } from '../lib/profile';
@@ -118,6 +119,9 @@ export default function Dashboard() {
             tone="success"
           />
         </section>
+
+        {/* 得意・不得意レーダー（全科目の概観） */}
+        <SubjectRadar results={results} subjects={subjects} />
 
         {/* 科目セレクター */}
         <section className="flex flex-wrap gap-2">
