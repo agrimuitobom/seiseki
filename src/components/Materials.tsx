@@ -7,6 +7,8 @@ import {
   removeMaterial,
   type Material,
 } from '../lib/materials';
+import { generateQuiz, type Quiz as QuizType } from '../lib/quiz';
+import Quiz from './Quiz';
 
 const ACCEPT = 'image/*,application/pdf';
 const MAX_BYTES = 20 * 1024 * 1024; // 20MB
@@ -23,6 +25,21 @@ export default function Materials() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [quizzingId, setQuizzingId] = useState<string | null>(null);
+  const [activeQuiz, setActiveQuiz] = useState<QuizType | null>(null);
+
+  async function handleGenerate(m: Material) {
+    setError(null);
+    setQuizzingId(m.id);
+    try {
+      const quiz = await generateQuiz(m.id, 5);
+      setActiveQuiz(quiz);
+    } catch {
+      setError('問題の生成に失敗しました。少し待って再度お試しください。');
+    } finally {
+      setQuizzingId(null);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -123,25 +140,36 @@ export default function Materials() {
           ) : (
             <ul className="divide-y divide-slate-100">
               {subjectMaterials.map((m) => (
-                <li key={m.id} className="flex items-center gap-3 py-2.5 text-sm">
-                  <span className="text-xl">{fileIcon(m.contentType)}</span>
-                  <a
-                    href={m.downloadURL}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="min-w-0 flex-1"
-                  >
-                    <p className="truncate font-bold text-slate-700 hover:text-main">{m.fileName}</p>
-                    <p className="text-xs text-slate-400">
-                      {fmtSize(m.size)}・{new Date(m.createdAt).toLocaleDateString()}
-                    </p>
-                  </a>
+                <li key={m.id} className="py-2.5 text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{fileIcon(m.contentType)}</span>
+                    <a
+                      href={m.downloadURL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-w-0 flex-1"
+                    >
+                      <p className="truncate font-bold text-slate-700 hover:text-main">
+                        {m.fileName}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {fmtSize(m.size)}・{new Date(m.createdAt).toLocaleDateString()}
+                      </p>
+                    </a>
+                    <button
+                      onClick={() => removeMaterial(m)}
+                      aria-label="削除"
+                      className="text-slate-300 hover:text-accent"
+                    >
+                      🗑
+                    </button>
+                  </div>
                   <button
-                    onClick={() => removeMaterial(m)}
-                    aria-label="削除"
-                    className="text-slate-300 hover:text-accent"
+                    onClick={() => handleGenerate(m)}
+                    disabled={quizzingId === m.id}
+                    className="mt-2 w-full rounded-[12px] bg-accent/10 py-2 text-xs font-bold text-accent transition active:scale-95 disabled:opacity-60"
                   >
-                    🗑
+                    {quizzingId === m.id ? '🤖 問題をつくっています…' : '🤖 AIで問題をつくる'}
                   </button>
                 </li>
               ))}
@@ -149,11 +177,12 @@ export default function Materials() {
           )}
         </section>
 
-        {/* フェーズ2の予告 */}
         <p className="px-2 text-center text-xs text-slate-400">
-          💡 近日：ここに保存したプリントを参照して、AIが模擬問題を自動作成します。
+          💡 各資料の「AIで問題をつくる」から、プリントを参照した模擬問題（選択＋記述）を生成できます。
         </p>
       </main>
+
+      {activeQuiz && <Quiz quiz={activeQuiz} onClose={() => setActiveQuiz(null)} />}
     </div>
   );
 }
