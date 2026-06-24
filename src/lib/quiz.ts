@@ -7,6 +7,7 @@ export type QuizQuestion = {
   choices: string[]; // mc のみ。written は []
   answer: string;
   explanation: string;
+  id?: string; // 弱点ノートからの再出題時、wrongAnswers のドキュメントID
 };
 
 export type Quiz = {

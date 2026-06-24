@@ -5,14 +5,16 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Study from './components/Study';
 import Materials from './components/Materials';
+import Weakness from './components/Weakness';
 import Settings from './components/Settings';
 
-type Tab = 'home' | 'study' | 'materials' | 'settings';
+type Tab = 'home' | 'study' | 'materials' | 'weakness' | 'settings';
 
 const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: 'home', label: 'ホーム', emoji: '🏠' },
   { id: 'study', label: '学習', emoji: '⏱️' },
   { id: 'materials', label: 'プリント', emoji: '📚' },
+  { id: 'weakness', label: '弱点', emoji: '📕' },
   { id: 'settings', label: '設定', emoji: '⚙️' },
 ];
 
@@ -44,6 +46,7 @@ function Shell() {
       {tab === 'home' && <Dashboard />}
       {tab === 'study' && <Study />}
       {tab === 'materials' && <Materials />}
+      {tab === 'weakness' && <Weakness />}
       {tab === 'settings' && <Settings />}
       <BottomNav tab={tab} onChange={setTab} />
     </>
