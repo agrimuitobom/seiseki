@@ -1,31 +1,29 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI, Type } from '@google/genai';
 
 admin.initializeApp();
 
-// Anthropic の APIキー。`firebase functions:secrets:set ANTHROPIC_API_KEY` で設定する。
-const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+// Google Gemini の APIキー。`firebase functions:secrets:set GEMINI_API_KEY` で設定する。
+const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
-// Claude に「この形のJSONで返す」と強制するスキーマ（構造化出力）。
+// Gemini に「この形のJSONで返す」と強制するスキーマ（構造化出力）。
 const QUIZ_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
+  type: Type.OBJECT,
   properties: {
-    title: { type: 'string' },
+    title: { type: Type.STRING },
     questions: {
-      type: 'array',
+      type: Type.ARRAY,
       items: {
-        type: 'object',
-        additionalProperties: false,
+        type: Type.OBJECT,
         properties: {
-          type: { type: 'string', enum: ['mc', 'written'] },
-          question: { type: 'string' },
+          type: { type: Type.STRING, enum: ['mc', 'written'] },
+          question: { type: Type.STRING },
           // 選択問題は選択肢を入れる。記述問題は空配列 []。
-          choices: { type: 'array', items: { type: 'string' } },
-          answer: { type: 'string' },
-          explanation: { type: 'string' },
+          choices: { type: Type.ARRAY, items: { type: Type.STRING } },
+          answer: { type: Type.STRING },
+          explanation: { type: Type.STRING },
         },
         required: ['type', 'question', 'choices', 'answer', 'explanation'],
       },
@@ -35,13 +33,13 @@ const QUIZ_SCHEMA = {
 };
 
 /**
- * 保存済みのプリント（画像 / PDF）を Claude に読ませて模擬問題を生成する。
+ * 保存済みのプリント（画像 / PDF）を Gemini に読ませて模擬問題を生成する。
  * クライアントは materialId と問題数を渡す。APIキーはこの関数内のみで使う。
  */
 export const generateQuiz = onCall(
   {
     region: 'asia-northeast1',
-    secrets: [ANTHROPIC_API_KEY],
+    secrets: [GEMINI_API_KEY],
     timeoutSeconds: 300,
     memory: '512MiB',
   },
@@ -81,17 +79,6 @@ export const generateQuiz = onCall(
     }
     const base64 = buf.toString('base64');
 
-    // Claude に渡すファイルブロック（画像 or PDF）
-    const fileBlock = isPdf
-      ? {
-          type: 'document',
-          source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-        }
-      : {
-          type: 'image',
-          source: { type: 'base64', media_type: m.contentType, data: base64 },
-        };
-
     const prompt = `あなたは${m.subject}の先生です。添付した授業プリントの内容だけを根拠に、生徒向けの練習問題を${count}問つくってください。
 - 選択問題（4択, type:"mc"）と記述問題（type:"written"）を両方ふくめてください。
 - すべて日本語で、プリントの範囲に沿った難易度にしてください。
@@ -100,30 +87,39 @@ export const generateQuiz = onCall(
 - written では choices は空配列 [] にし、answer は模範解答にしてください。
 - プリントから読み取れない場合は推測せず、読み取れた範囲で作問してください。`;
 
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY.value() });
 
-    let response;
+    let text: string | undefined;
     try {
-      // output_config はSDKの型に無い場合があるため any 経由で渡す。
-      response = await anthropic.messages.create({
-        model: 'claude-opus-4-8',
-        max_tokens: 8000,
-        output_config: { format: { type: 'json_schema', schema: QUIZ_SCHEMA } },
-        messages: [{ role: 'user', content: [fileBlock, { type: 'text', text: prompt }] }],
-      } as unknown as Anthropic.MessageCreateParamsNonStreaming);
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: m.contentType, data: base64 } },
+              { text: prompt },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: QUIZ_SCHEMA,
+        },
+      });
+      text = response.text;
     } catch (err) {
-      console.error('Anthropic API error', err);
+      console.error('Gemini API error', err);
       throw new HttpsError('internal', 'AIへのリクエストに失敗しました。時間をおいて再度お試しください。');
     }
 
-    const textBlock = response.content.find((b) => b.type === 'text');
-    if (!textBlock || textBlock.type !== 'text') {
+    if (!text) {
       throw new HttpsError('internal', '問題の生成に失敗しました。');
     }
 
     let parsed: { title?: string; questions?: unknown[] };
     try {
-      parsed = JSON.parse(textBlock.text);
+      parsed = JSON.parse(text);
     } catch {
       throw new HttpsError('internal', '生成結果の解析に失敗しました。');
     }

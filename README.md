@@ -75,7 +75,7 @@ npm run deploy
 - **[設計書 / 実装ガイド](docs/設計書.md)** — UI/UX、技術スタック、DB設計、ロードマップ
 - **[デプロイ手順](docs/デプロイ手順.md)** — Firebase 公開の詳細ステップ
 - **[自動デプロイ設定](docs/自動デプロイ設定.md)** — GitHub Actions で main マージ時に自動デプロイ
-- **[AI問題生成セットアップ](docs/AI問題生成セットアップ.md)** — Cloud Functions + Claude で模擬問題を生成
+- **[AI問題生成セットアップ](docs/AI問題生成セットアップ.md)** — Cloud Functions + Gemini で模擬問題を生成
 
 ## デザインシステム（スカイブルー・テーマ）
 
