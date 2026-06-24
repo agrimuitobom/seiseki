@@ -48,6 +48,13 @@ service cloud.firestore {
       allow update: if ownsExisting() && ownsIncoming();
     }
 
+    // 授業プリント・資料（科目ごと）のメタデータ
+    match /materials/{docId} {
+      allow read, delete: if ownsExisting();
+      allow create: if ownsIncoming();
+      allow update: if ownsExisting() && ownsIncoming();
+    }
+
     // フレンド: 申請者か被申請者のみが読み書きできる
     match /friendships/{docId} {
       allow read, write: if isSignedIn()
