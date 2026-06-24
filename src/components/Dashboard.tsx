@@ -4,6 +4,8 @@ import GradeForm from './GradeForm';
 import { useAuth, logout } from '../lib/auth';
 import { useProfile } from '../lib/profile';
 import { watchResults, removeResult, type TestResult } from '../lib/grades';
+import { watchStudyLogs, sumDurationSince, startOfWeek, type StudyLog } from '../lib/study';
+import { watchAssignments, daysUntil, type Assignment } from '../lib/assignments';
 
 const pct = (score: number, max: number) => (max > 0 ? Math.round((score / max) * 100) : 0);
 
@@ -34,13 +36,28 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { subjects } = useProfile();
   const [results, setResults] = useState<TestResult[]>([]);
+  const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [subject, setSubject] = useState<string>(subjects[0]);
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    return watchResults(user.uid, setResults);
+    const u1 = watchResults(user.uid, setResults);
+    const u2 = watchStudyLogs(user.uid, setStudyLogs);
+    const u3 = watchAssignments(user.uid, setAssignments);
+    return () => {
+      u1();
+      u2();
+      u3();
+    };
   }, [user]);
+
+  // 今週の勉強時間（時間, 小数1桁）
+  const weekHours = (sumDurationSince(studyLogs, startOfWeek()) / 3600).toFixed(1);
+  // 次の未完了提出物までの日数
+  const nextDue = assignments.find((a) => !a.done);
+  const nextDueDays = nextDue ? daysUntil(nextDue.dueDate) : null;
 
   // 科目リストが変わったら、選択中の科目が無効なら先頭に合わせる
   useEffect(() => {
@@ -85,11 +102,13 @@ export default function Dashboard() {
       <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-36">
         {/* サマリーカード */}
         <section className="grid grid-cols-3 gap-3">
-          <StatCard label="登録テスト" value={String(results.length)} unit="件" tone="main" />
+          <StatCard label="今週の勉強" value={weekHours} unit="h" tone="main" />
           <StatCard
-            label={`直近(${subject})`}
-            value={latestPct != null ? String(latestPct) : '—'}
-            unit={latestPct != null ? '%' : ''}
+            label="次の提出物"
+            value={
+              nextDueDays == null ? '—' : nextDueDays < 0 ? '超過' : nextDueDays === 0 ? '今日' : String(nextDueDays)
+            }
+            unit={nextDueDays != null && nextDueDays > 0 ? '日後' : ''}
             tone="accent"
           />
           <StatCard

@@ -3,13 +3,15 @@ import { AuthProvider, useAuth } from './lib/auth';
 import { ProfileProvider } from './lib/profile';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import Study from './components/Study';
 import Materials from './components/Materials';
 import Settings from './components/Settings';
 
-type Tab = 'home' | 'materials' | 'settings';
+type Tab = 'home' | 'study' | 'materials' | 'settings';
 
 const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: 'home', label: 'ホーム', emoji: '🏠' },
+  { id: 'study', label: '学習', emoji: '⏱️' },
   { id: 'materials', label: 'プリント', emoji: '📚' },
   { id: 'settings', label: '設定', emoji: '⚙️' },
 ];
@@ -40,6 +42,7 @@ function Shell() {
   return (
     <>
       {tab === 'home' && <Dashboard />}
+      {tab === 'study' && <Study />}
       {tab === 'materials' && <Materials />}
       {tab === 'settings' && <Settings />}
       <BottomNav tab={tab} onChange={setTab} />
