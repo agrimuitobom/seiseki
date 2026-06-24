@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GradeChart, type GradePoint } from './GradeChart';
-import GradeForm, { SUBJECTS } from './GradeForm';
+import GradeForm from './GradeForm';
 import { useAuth, logout } from '../lib/auth';
+import { useProfile } from '../lib/profile';
 import { watchResults, removeResult, type TestResult } from '../lib/grades';
 
 const pct = (score: number, max: number) => (max > 0 ? Math.round((score / max) * 100) : 0);
@@ -31,14 +32,20 @@ function StatCard({
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { subjects } = useProfile();
   const [results, setResults] = useState<TestResult[]>([]);
-  const [subject, setSubject] = useState<string>(SUBJECTS[1]);
+  const [subject, setSubject] = useState<string>(subjects[0]);
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     return watchResults(user.uid, setResults);
   }, [user]);
+
+  // 科目リストが変わったら、選択中の科目が無効なら先頭に合わせる
+  useEffect(() => {
+    if (subjects.length > 0 && !subjects.includes(subject)) setSubject(subjects[0]);
+  }, [subjects, subject]);
 
   const subjectResults = useMemo(
     () => results.filter((r) => r.subject === subject),
@@ -95,7 +102,7 @@ export default function Dashboard() {
 
         {/* 科目セレクター */}
         <section className="flex flex-wrap gap-2">
-          {SUBJECTS.map((s) => (
+          {subjects.map((s) => (
             <button
               key={s}
               onClick={() => setSubject(s)}

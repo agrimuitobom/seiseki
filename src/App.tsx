@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
+import { ProfileProvider } from './lib/profile';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Materials from './components/Materials';
+import Settings from './components/Settings';
 
-type Tab = 'home' | 'materials';
+type Tab = 'home' | 'materials' | 'settings';
 
 const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: 'home', label: 'ホーム', emoji: '🏠' },
   { id: 'materials', label: 'プリント', emoji: '📚' },
+  { id: 'settings', label: '設定', emoji: '⚙️' },
 ];
 
 function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
@@ -36,7 +39,9 @@ function Shell() {
   const [tab, setTab] = useState<Tab>('home');
   return (
     <>
-      {tab === 'home' ? <Dashboard /> : <Materials />}
+      {tab === 'home' && <Dashboard />}
+      {tab === 'materials' && <Materials />}
+      {tab === 'settings' && <Settings />}
       <BottomNav tab={tab} onChange={setTab} />
     </>
   );
@@ -51,7 +56,12 @@ function Gate() {
       </div>
     );
   }
-  return user ? <Shell /> : <Login />;
+  if (!user) return <Login />;
+  return (
+    <ProfileProvider>
+      <Shell />
+    </ProfileProvider>
+  );
 }
 
 export default function App() {
