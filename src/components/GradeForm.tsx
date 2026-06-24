@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { addResult } from '../lib/grades';
-
-export const SUBJECTS = ['国語', '数学', '英語', '理科', '社会'] as const;
+import { useProfile } from '../lib/profile';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -14,7 +13,8 @@ export default function GradeForm({
   defaultSubject?: string;
   onClose: () => void;
 }) {
-  const [subject, setSubject] = useState(defaultSubject ?? SUBJECTS[1]);
+  const { subjects } = useProfile();
+  const [subject, setSubject] = useState(defaultSubject ?? subjects[0]);
   const [testName, setTestName] = useState('');
   const [testDate, setTestDate] = useState(today());
   const [score, setScore] = useState('');
@@ -69,7 +69,7 @@ export default function GradeForm({
           <div>
             <label className="mb-1 block text-xs font-bold text-slate-500">科目</label>
             <div className="flex flex-wrap gap-2">
-              {SUBJECTS.map((s) => (
+              {subjects.map((s) => (
                 <button
                   type="button"
                   key={s}

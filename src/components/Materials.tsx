@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { SUBJECTS } from './GradeForm';
+import { useProfile } from '../lib/profile';
 import {
   watchMaterials,
   uploadMaterial,
@@ -20,8 +20,9 @@ const fileIcon = (type: string) => (type === 'application/pdf' ? '📄' : '🖼�
 
 export default function Materials() {
   const { user } = useAuth();
+  const { subjects } = useProfile();
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [subject, setSubject] = useState<string>(SUBJECTS[1]);
+  const [subject, setSubject] = useState<string>(subjects[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,6 +46,11 @@ export default function Materials() {
     if (!user) return;
     return watchMaterials(user.uid, setMaterials);
   }, [user]);
+
+  // 科目リストが変わったら、選択中の科目が無効なら先頭に合わせる
+  useEffect(() => {
+    if (subjects.length > 0 && !subjects.includes(subject)) setSubject(subjects[0]);
+  }, [subjects, subject]);
 
   const subjectMaterials = useMemo(
     () => materials.filter((m) => m.subject === subject),
@@ -86,7 +92,7 @@ export default function Materials() {
       <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-28">
         {/* 科目セレクター */}
         <section className="flex flex-wrap gap-2">
-          {SUBJECTS.map((s) => (
+          {subjects.map((s) => (
             <button
               key={s}
               onClick={() => setSubject(s)}
