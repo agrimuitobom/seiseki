@@ -18,6 +18,10 @@ dist
 .firebase
 firebase-debug.log
 
+# cloud functions build output
+functions/node_modules
+functions/lib
+
 # logs / editor
 *.log
 .DS_Store

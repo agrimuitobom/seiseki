@@ -55,6 +55,12 @@ service cloud.firestore {
       allow update: if ownsExisting() && ownsIncoming();
     }
 
+    // AI生成の模擬問題。作成は Cloud Function（管理者権限）が行うため、
+    // クライアントには読み取りと削除のみ本人に許可する。
+    match /quizzes/{docId} {
+      allow read, delete: if ownsExisting();
+    }
+
     // フレンド: 申請者か被申請者のみが読み書きできる
     match /friendships/{docId} {
       allow read, write: if isSignedIn()
