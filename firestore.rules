@@ -79,6 +79,12 @@ service cloud.firestore {
       allow create, update: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // FCM トークン（プッシュ通知の宛先）。本人のみ登録・削除可。
+    match /fcmTokens/{token} {
+      allow read, delete: if ownsExisting();
+      allow create, update: if ownsIncoming();
+    }
+
     // フレンドコード → uid の対応表（コード検索用）
     match /friendCodes/{code} {
       allow get: if isSignedIn();

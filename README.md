@@ -76,6 +76,7 @@ npm run deploy
 - **[デプロイ手順](docs/デプロイ手順.md)** — Firebase 公開の詳細ステップ
 - **[自動デプロイ設定](docs/自動デプロイ設定.md)** — GitHub Actions で main マージ時に自動デプロイ
 - **[AI問題生成セットアップ](docs/AI問題生成セットアップ.md)** — Cloud Functions + Gemini で模擬問題を生成
+- **[プッシュ通知セットアップ](docs/プッシュ通知セットアップ.md)** — FCM で提出物リマインドを端末に通知
 
 ## デザインシステム（スカイブルー・テーマ）
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth, logout } from '../lib/auth';
+import { enableNotifications } from '../lib/messaging';
 import {
   useProfile,
   SCHOOL_TYPES,
@@ -14,6 +15,16 @@ export default function Settings() {
   const { profile, save } = useProfile();
   const [newSubject, setNewSubject] = useState('');
   const [name, setName] = useState(profile.displayName);
+  const [notifMsg, setNotifMsg] = useState<string | null>(null);
+  const [notifBusy, setNotifBusy] = useState(false);
+
+  async function turnOnNotifications() {
+    if (!user) return;
+    setNotifBusy(true);
+    const res = await enableNotifications(user.uid);
+    setNotifMsg(res.message);
+    setNotifBusy(false);
+  }
 
   // 学校種別を変えると、学年と科目をその種別の初期値に合わせる
   function changeSchool(type: SchoolType) {
@@ -156,6 +167,22 @@ export default function Settings() {
           <p className="mt-2 text-xs text-slate-400">
             ここで編集した科目が、成績入力・グラフ・プリントに反映されます。
           </p>
+        </section>
+
+        {/* 通知 */}
+        <section className="rounded-card bg-white p-4 shadow-card">
+          <h2 className="mb-1 font-display text-sm font-bold">通知</h2>
+          <p className="mb-3 text-xs text-slate-400">
+            提出物の期限が近づいたら、端末にプッシュ通知でお知らせします。
+          </p>
+          <button
+            onClick={turnOnNotifications}
+            disabled={notifBusy}
+            className="w-full rounded-card bg-main py-2.5 text-sm font-bold text-white shadow-card transition active:scale-95 disabled:opacity-50"
+          >
+            {notifBusy ? '設定中…' : '🔔 通知をオンにする'}
+          </button>
+          {notifMsg && <p className="mt-2 text-xs font-bold text-main">{notifMsg}</p>}
         </section>
 
         {/* アカウント */}

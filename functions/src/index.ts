@@ -1,9 +1,74 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { GoogleGenAI, Type } from '@google/genai';
 
 admin.initializeApp();
+
+// JST の日付文字列 'yyyy-mm-dd'（offsetDays 日後）
+function jstDateStr(offsetDays = 0): string {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+/**
+ * 毎日18:00(JST)に、期限が「今日/明日」の未完了提出物を持つユーザーへ
+ * プッシュ通知を送る。
+ */
+export const remindAssignments = onSchedule(
+  { schedule: '0 18 * * *', timeZone: 'Asia/Tokyo', region: 'asia-northeast1' },
+  async () => {
+    const db = admin.firestore();
+    const today = jstDateStr(0);
+    const tomorrow = jstDateStr(1);
+
+    const snap = await db.collection('assignments').where('done', '==', false).get();
+
+    // ユーザーごとに期限間近の提出物を集計
+    const byOwner = new Map<string, { title: string; when: string }[]>();
+    snap.forEach((doc) => {
+      const a = doc.data() as { owner: string; title: string; dueDate: string };
+      const when = a.dueDate === today ? '今日' : a.dueDate === tomorrow ? '明日' : null;
+      if (!when) return;
+      const list = byOwner.get(a.owner) ?? [];
+      list.push({ title: a.title, when });
+      byOwner.set(a.owner, list);
+    });
+
+    for (const [owner, items] of byOwner) {
+      const tokensSnap = await db.collection('fcmTokens').where('owner', '==', owner).get();
+      const tokens = tokensSnap.docs.map((d) => d.id);
+      if (tokens.length === 0) continue;
+
+      const body =
+        items.length === 1
+          ? `「${items[0].title}」が${items[0].when}まで！`
+          : `提出物が${items.length}件、期限が近づいています`;
+
+      const res = await admin.messaging().sendEachForMulticast({
+        tokens,
+        data: { title: '提出物リマインド 📌', body },
+      });
+
+      // 無効になったトークンを掃除
+      res.responses.forEach((r, i) => {
+        if (
+          !r.success &&
+          (r.error?.code === 'messaging/registration-token-not-registered' ||
+            r.error?.code === 'messaging/invalid-registration-token')
+        ) {
+          void db.collection('fcmTokens').doc(tokens[i]).delete();
+        }
+      });
+    }
+  },
+);
 
 // Google Gemini の APIキー。`firebase functions:secrets:set GEMINI_API_KEY` で設定する。
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
