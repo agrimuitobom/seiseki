@@ -70,6 +70,22 @@ service cloud.firestore {
             || request.auth.uid == request.resource.data.addressee);
     }
 
+    // 公開プロフィール（表示名・フレンドコード・週間勉強時間）
+    // ランキング表示のため、ログインユーザーは個別取得(get)できる。
+    // 一覧(list)は禁止して列挙を防ぐ。書き込みは本人のみ。
+    match /publicProfiles/{uid} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create, update: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // フレンドコード → uid の対応表（コード検索用）
+    match /friendCodes/{code} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
     // 既定では全拒否（上記以外のパスはアクセス不可）
     match /{document=**} {
       allow read, write: if false;
