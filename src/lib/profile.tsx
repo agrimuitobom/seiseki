@@ -8,10 +8,12 @@ import {
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from './auth';
+import { ensurePublicProfile } from './social';
 
 export type SchoolType = '小' | '中' | '高';
 
 export type Profile = {
+  displayName: string;
   schoolType: SchoolType;
   grade: string;
   subjects: string[];
@@ -39,6 +41,7 @@ export const DEFAULT_SUBJECTS: Record<SchoolType, string[]> = {
 };
 
 const DEFAULT_PROFILE: Profile = {
+  displayName: 'ゲスト',
   schoolType: '中',
   grade: '1年',
   subjects: DEFAULT_SUBJECTS['中'],
@@ -60,7 +63,8 @@ const Ctx = createContext<ProfileCtx>({
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const defaultName = user?.email?.split('@')[0] ?? 'ゲスト';
+  const [profile, setProfile] = useState<Profile>({ ...DEFAULT_PROFILE, displayName: defaultName });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -71,6 +75,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       if (d) {
         const schoolType: SchoolType = (d.schoolType as SchoolType) ?? DEFAULT_PROFILE.schoolType;
         setProfile({
+          displayName: d.displayName ?? defaultName,
           schoolType,
           grade: d.grade ?? GRADES[schoolType][0],
           subjects:
@@ -82,6 +87,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
   }, [user]);
+
+  // 公開プロフィール（表示名・フレンドコード）を用意/同期
+  useEffect(() => {
+    if (!user) return;
+    ensurePublicProfile(user.uid, profile.displayName).catch(() => {});
+  }, [user, profile.displayName]);
 
   async function save(patch: Partial<Profile>) {
     if (!user) return;

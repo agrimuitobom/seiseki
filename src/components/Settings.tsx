@@ -13,6 +13,7 @@ export default function Settings() {
   const { user } = useAuth();
   const { profile, save } = useProfile();
   const [newSubject, setNewSubject] = useState('');
+  const [name, setName] = useState(profile.displayName);
 
   // 学校種別を変えると、学年と科目をその種別の初期値に合わせる
   function changeSchool(type: SchoolType) {
@@ -48,6 +49,28 @@ export default function Settings() {
       </header>
 
       <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-28">
+        {/* 表示名 */}
+        <section className="rounded-card bg-white p-4 shadow-card">
+          <h2 className="mb-2 font-display text-sm font-bold">表示名</h2>
+          <div className="flex gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={20}
+              placeholder="ニックネーム"
+              className="flex-1 rounded-[12px] border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-main focus:ring-2 focus:ring-main/20"
+            />
+            <button
+              onClick={() => name.trim() && save({ displayName: name.trim() })}
+              disabled={!name.trim() || name.trim() === profile.displayName}
+              className="rounded-[12px] bg-main px-4 text-sm font-bold text-white transition active:scale-95 disabled:opacity-40"
+            >
+              保存
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">フレンドのランキングに表示される名前です。</p>
+        </section>
+
         {/* 学校種別 */}
         <section className="rounded-card bg-white p-4 shadow-card">
           <h2 className="mb-2 font-display text-sm font-bold">学校</h2>

@@ -20,6 +20,7 @@ import {
   daysUntil,
   type Assignment,
 } from '../lib/assignments';
+import { bumpWeeklyStudy } from '../lib/social';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -81,6 +82,8 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
     // 5秒未満は誤操作とみなして保存しない
     if (endedAt - startedAt >= 5000) {
       await addStudyLog(uid, subject, startedAt, endedAt);
+      // フレンド内ランキング用に今週の合計へ加算
+      await bumpWeeklyStudy(uid, Math.round((endedAt - startedAt) / 1000)).catch(() => {});
     }
   }
 

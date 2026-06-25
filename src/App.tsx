@@ -6,15 +6,17 @@ import Dashboard from './components/Dashboard';
 import Study from './components/Study';
 import Materials from './components/Materials';
 import Weakness from './components/Weakness';
+import Friends from './components/Friends';
 import Settings from './components/Settings';
 
-type Tab = 'home' | 'study' | 'materials' | 'weakness' | 'settings';
+type Tab = 'home' | 'study' | 'materials' | 'weakness' | 'friends' | 'settings';
 
 const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: 'home', label: 'ホーム', emoji: '🏠' },
   { id: 'study', label: '学習', emoji: '⏱️' },
   { id: 'materials', label: 'プリント', emoji: '📚' },
   { id: 'weakness', label: '弱点', emoji: '📕' },
+  { id: 'friends', label: 'フレンド', emoji: '👥' },
   { id: 'settings', label: '設定', emoji: '⚙️' },
 ];
 
@@ -26,11 +28,11 @@ function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) 
           <button
             key={t.id}
             onClick={() => onChange(t.id)}
-            className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-bold transition ${
+            className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-bold transition ${
               tab === t.id ? 'text-main' : 'text-slate-400'
             }`}
           >
-            <span className="text-xl">{t.emoji}</span>
+            <span className="text-lg">{t.emoji}</span>
             {t.label}
           </button>
         ))}
@@ -47,6 +49,7 @@ function Shell() {
       {tab === 'study' && <Study />}
       {tab === 'materials' && <Materials />}
       {tab === 'weakness' && <Weakness />}
+      {tab === 'friends' && <Friends />}
       {tab === 'settings' && <Settings />}
       <BottomNav tab={tab} onChange={setTab} />
     </>
