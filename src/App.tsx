@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { ProfileProvider } from './lib/profile';
+import { listenForegroundMessages } from './lib/messaging';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Study from './components/Study';
@@ -43,6 +44,9 @@ function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) 
 
 function Shell() {
   const [tab, setTab] = useState<Tab>('home');
+  useEffect(() => {
+    listenForegroundMessages();
+  }, []);
   return (
     <>
       {tab === 'home' && <Dashboard />}
