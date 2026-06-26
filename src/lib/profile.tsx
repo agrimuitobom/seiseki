@@ -12,11 +12,21 @@ import { ensurePublicProfile } from './social';
 
 export type SchoolType = '小' | '中' | '高';
 
+export type CareerGoal = { type: string; target: string; note: string };
+
+export const CAREER_TYPES: { value: string; label: string }[] = [
+  { value: 'high_school', label: '高校入試' },
+  { value: 'university', label: '大学進学' },
+  { value: 'vocational', label: '専門・短大' },
+  { value: 'employment', label: '就職' },
+];
+
 export type Profile = {
   displayName: string;
   schoolType: SchoolType;
   grade: string;
   subjects: string[];
+  careerGoal: CareerGoal | null;
 };
 
 export const SCHOOL_TYPES: SchoolType[] = ['小', '中', '高'];
@@ -45,6 +55,7 @@ const DEFAULT_PROFILE: Profile = {
   schoolType: '中',
   grade: '1年',
   subjects: DEFAULT_SUBJECTS['中'],
+  careerGoal: null,
 };
 
 type ProfileCtx = {
@@ -82,6 +93,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             Array.isArray(d.subjects) && d.subjects.length > 0
               ? d.subjects
               : DEFAULT_SUBJECTS[schoolType],
+          careerGoal: (d.careerGoal as CareerGoal) ?? null,
         });
       }
       setLoading(false);

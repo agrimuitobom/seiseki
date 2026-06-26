@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GradeChart, type GradePoint } from './GradeChart';
 import { SubjectRadar } from './SubjectRadar';
+import { CareerAdvice } from './CareerAdvice';
 import GradeForm from './GradeForm';
 import { useAuth, logout } from '../lib/auth';
 import { useProfile } from '../lib/profile';
@@ -119,6 +120,9 @@ export default function Dashboard() {
             tone="success"
           />
         </section>
+
+        {/* 進路アドバイス（Gemini） */}
+        <CareerAdvice />
 
         {/* 得意・不得意レーダー（全科目の概観） */}
         <SubjectRadar results={results} subjects={subjects} />

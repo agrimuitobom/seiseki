@@ -7,6 +7,7 @@ import {
   SCHOOL_LABELS,
   GRADES,
   DEFAULT_SUBJECTS,
+  CAREER_TYPES,
   type SchoolType,
 } from '../lib/profile';
 
@@ -17,6 +18,14 @@ export default function Settings() {
   const [name, setName] = useState(profile.displayName);
   const [notifMsg, setNotifMsg] = useState<string | null>(null);
   const [notifBusy, setNotifBusy] = useState(false);
+  const [goalType, setGoalType] = useState(profile.careerGoal?.type ?? '');
+  const [goalTarget, setGoalTarget] = useState(profile.careerGoal?.target ?? '');
+  const [goalNote, setGoalNote] = useState(profile.careerGoal?.note ?? '');
+
+  function saveGoal() {
+    if (!goalType) return;
+    save({ careerGoal: { type: goalType, target: goalTarget.trim(), note: goalNote.trim() } });
+  }
 
   async function turnOnNotifications() {
     if (!user) return;
@@ -166,6 +175,46 @@ export default function Settings() {
           </div>
           <p className="mt-2 text-xs text-slate-400">
             ここで編集した科目が、成績入力・グラフ・プリントに反映されます。
+          </p>
+        </section>
+
+        {/* 進路目標 */}
+        <section className="rounded-card bg-white p-4 shadow-card">
+          <h2 className="mb-2 font-display text-sm font-bold">進路目標</h2>
+          <div className="mb-2 flex flex-wrap gap-2">
+            {CAREER_TYPES.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => setGoalType(c.value)}
+                className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
+                  goalType === c.value ? 'bg-main text-white' : 'bg-sky-100 text-main'
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <input
+            value={goalTarget}
+            onChange={(e) => setGoalTarget(e.target.value)}
+            placeholder="志望先（例: ○○高校 / ○○大学）"
+            className="mb-2 w-full rounded-[12px] border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-main focus:ring-2 focus:ring-main/20"
+          />
+          <input
+            value={goalNote}
+            onChange={(e) => setGoalNote(e.target.value)}
+            placeholder="補足（任意：得意にしたい科目・目標偏差値など）"
+            className="mb-2 w-full rounded-[12px] border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-main focus:ring-2 focus:ring-main/20"
+          />
+          <button
+            onClick={saveGoal}
+            disabled={!goalType}
+            className="w-full rounded-card bg-main py-2.5 text-sm font-bold text-white shadow-card transition active:scale-95 disabled:opacity-40"
+          >
+            進路目標を保存
+          </button>
+          <p className="mt-2 text-xs text-slate-400">
+            ホームの「進路アドバイス」で、AIが目標に向けた助言を出します。
           </p>
         </section>
 

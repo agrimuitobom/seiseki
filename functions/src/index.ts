@@ -6,6 +6,30 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 admin.initializeApp();
 
+// Google Gemini の APIキー。`firebase functions:secrets:set GEMINI_API_KEY` で設定する。
+const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
+
+// 進路アドバイスの出力スキーマ
+const ADVICE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    summary: { type: Type.STRING },
+    steps: { type: Type.ARRAY, items: { type: Type.STRING } },
+    subjects: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          subject: { type: Type.STRING },
+          advice: { type: Type.STRING },
+        },
+        required: ['subject', 'advice'],
+      },
+    },
+  },
+  required: ['summary', 'steps', 'subjects'],
+};
+
 // JST の日付文字列 'yyyy-mm-dd'（offsetDays 日後）
 function jstDateStr(offsetDays = 0): string {
   const d = new Date(Date.now() + offsetDays * 86400000);
@@ -16,6 +40,105 @@ function jstDateStr(offsetDays = 0): string {
     day: '2-digit',
   }).format(d);
 }
+
+/**
+ * 進路アドバイザー：進路目標＋現在の成績から、目標達成に向けた助言を Gemini で生成。
+ */
+export const careerAdvice = onCall(
+  {
+    region: 'asia-northeast1',
+    secrets: [GEMINI_API_KEY],
+    timeoutSeconds: 120,
+    memory: '512MiB',
+  },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'ログインが必要です。');
+
+    const db = admin.firestore();
+    const u = (await db.collection('users').doc(uid).get()).data() ?? {};
+    const goal = u.careerGoal as { type?: string; target?: string; note?: string } | undefined;
+    if (!goal || !goal.type) {
+      throw new HttpsError('failed-precondition', '進路目標を設定してください。');
+    }
+
+    const goalLabel =
+      ({
+        high_school: '高校入試',
+        university: '大学進学',
+        vocational: '専門・短大',
+        employment: '就職',
+      } as Record<string, string>)[goal.type] ?? goal.type;
+
+    // 成績サマリ（科目ごとの直近・平均得点率）
+    const tr = await db.collection('testResults').where('owner', '==', uid).get();
+    const bySubject = new Map<string, { date: string; pct: number }[]>();
+    tr.forEach((d) => {
+      const r = d.data() as { subject: string; testDate: string; score: number; maxScore: number };
+      const pct = r.maxScore > 0 ? Math.round((r.score / r.maxScore) * 100) : 0;
+      const arr = bySubject.get(r.subject) ?? [];
+      arr.push({ date: r.testDate, pct });
+      bySubject.set(r.subject, arr);
+    });
+    const lines: string[] = [];
+    for (const [sub, arr] of bySubject) {
+      arr.sort((a, b) => a.date.localeCompare(b.date));
+      const latest = arr[arr.length - 1];
+      const avg = Math.round(arr.reduce((s, x) => s + x.pct, 0) / arr.length);
+      lines.push(`${sub}: 直近${latest.pct}% / 平均${avg}%（${arr.length}回）`);
+    }
+    const gradesSummary = lines.length ? lines.join('\n') : '（成績データはまだありません）';
+    const schoolGrade = `${u.schoolType ?? ''} ${u.grade ?? ''}`.trim();
+
+    const prompt = `あなたは中高生向けの進路指導の先生です。次の生徒に、目標達成に向けて「今やるべきこと」を前向きかつ具体的に助言してください。
+
+# 生徒
+- 学年: ${schoolGrade || '不明'}
+- 進路目標: ${goalLabel}${goal.target ? `（志望: ${goal.target}）` : ''}
+${goal.note ? `- 補足: ${goal.note}` : ''}
+
+# 現在の成績（得点率）
+${gradesSummary}
+
+# 出力の方針
+- summary: 現状と目標までの見通しを2〜3文で。プレッシャーを与えすぎず、伸びしろを前向きに示す。
+- steps: 今日から取り組める具体的な行動を3〜5個。科目名や時間の目安を入れて具体的に。
+- subjects: 成績データのある科目について、それぞれ一言アドバイス。弱点科目を優先する。
+- すべて日本語、中高生にわかる平易な言葉で。`;
+
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY.value() });
+    let text: string | undefined;
+    try {
+      const res = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { responseMimeType: 'application/json', responseSchema: ADVICE_SCHEMA },
+      });
+      text = res.text;
+    } catch (err) {
+      console.error('careerAdvice Gemini error', err);
+      throw new HttpsError('internal', 'AIへのリクエストに失敗しました。時間をおいて再度お試しください。');
+    }
+    if (!text) throw new HttpsError('internal', 'アドバイスの生成に失敗しました。');
+
+    let parsed: { summary?: string; steps?: unknown[]; subjects?: unknown[] };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new HttpsError('internal', '生成結果の解析に失敗しました。');
+    }
+
+    const advice = {
+      summary: parsed.summary ?? '',
+      steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+      subjects: Array.isArray(parsed.subjects) ? parsed.subjects : [],
+      goalLabel,
+      createdAt: Date.now(),
+    };
+    await db.collection('careerAdvice').doc(uid).set(advice);
+    return advice;
+  },
+);
 
 /**
  * 毎日18:00(JST)に、期限が「今日/明日」の未完了提出物を持つユーザーへ
@@ -69,9 +192,6 @@ export const remindAssignments = onSchedule(
     }
   },
 );
-
-// Google Gemini の APIキー。`firebase functions:secrets:set GEMINI_API_KEY` で設定する。
-const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
 // Gemini に「この形のJSONで返す」と強制するスキーマ（構造化出力）。
 const QUIZ_SCHEMA = {
