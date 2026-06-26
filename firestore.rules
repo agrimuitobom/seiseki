@@ -79,6 +79,11 @@ service cloud.firestore {
       allow create, update: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // 進路アドバイス（Cloud Functionが生成）。本人のみ閲覧可。
+    match /careerAdvice/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+    }
+
     // FCM トークン（プッシュ通知の宛先）。本人のみ登録・削除可。
     match /fcmTokens/{token} {
       allow read, delete: if ownsExisting();
