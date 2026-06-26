@@ -7,7 +7,13 @@ import {
   removeMaterial,
   type Material,
 } from '../lib/materials';
-import { generateQuiz, type Quiz as QuizType } from '../lib/quiz';
+import {
+  generateQuiz,
+  type Quiz as QuizType,
+  type GenerateOptions,
+  type Difficulty,
+  type QuizFormat,
+} from '../lib/quiz';
 import Quiz from './Quiz';
 
 const ACCEPT = 'image/*,application/pdf';
@@ -28,12 +34,14 @@ export default function Materials() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [quizzingId, setQuizzingId] = useState<string | null>(null);
   const [activeQuiz, setActiveQuiz] = useState<QuizType | null>(null);
+  const [optionMaterial, setOptionMaterial] = useState<Material | null>(null);
 
-  async function handleGenerate(m: Material) {
+  async function handleGenerate(m: Material, opts: GenerateOptions) {
     setError(null);
+    setOptionMaterial(null);
     setQuizzingId(m.id);
     try {
-      const quiz = await generateQuiz(m.id, 5);
+      const quiz = await generateQuiz(m.id, opts);
       setActiveQuiz(quiz);
     } catch {
       setError('問題の生成に失敗しました。少し待って再度お試しください。');
@@ -171,7 +179,7 @@ export default function Materials() {
                     </button>
                   </div>
                   <button
-                    onClick={() => handleGenerate(m)}
+                    onClick={() => setOptionMaterial(m)}
                     disabled={quizzingId === m.id}
                     className="mt-2 w-full rounded-[12px] bg-accent/10 py-2 text-xs font-bold text-accent transition active:scale-95 disabled:opacity-60"
                   >
@@ -188,7 +196,104 @@ export default function Materials() {
         </p>
       </main>
 
+      {optionMaterial && (
+        <QuizOptions
+          material={optionMaterial}
+          onClose={() => setOptionMaterial(null)}
+          onGenerate={(opts) => handleGenerate(optionMaterial, opts)}
+        />
+      )}
+
       {activeQuiz && <Quiz quiz={activeQuiz} onClose={() => setActiveQuiz(null)} />}
+    </div>
+  );
+}
+
+function QuizOptions({
+  material,
+  onClose,
+  onGenerate,
+}: {
+  material: Material;
+  onClose: () => void;
+  onGenerate: (opts: GenerateOptions) => void;
+}) {
+  const [count, setCount] = useState(5);
+  const [difficulty, setDifficulty] = useState<Difficulty>('normal');
+  const [format, setFormat] = useState<QuizFormat>('both');
+
+  const Pill = <T,>({
+    value,
+    current,
+    set,
+    label,
+  }: {
+    value: T;
+    current: T;
+    set: (v: T) => void;
+    label: string;
+  }) => (
+    <button
+      onClick={() => set(value)}
+      className={`flex-1 rounded-[12px] py-2 text-sm font-bold transition ${
+        current === value ? 'bg-main text-white shadow-card' : 'bg-sky-100 text-main'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-end bg-black/30 sm:place-items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-t-[24px] bg-white p-5 shadow-card sm:rounded-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg font-bold text-main">AIで問題をつくる</h2>
+          <button onClick={onClose} aria-label="閉じる" className="text-slate-400">
+            ✕
+          </button>
+        </div>
+        <p className="mb-4 truncate text-xs text-slate-400">{material.fileName}</p>
+
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-xs font-bold text-slate-500">問題数</p>
+            <div className="flex gap-2">
+              {[3, 5, 10].map((n) => (
+                <Pill key={n} value={n} current={count} set={setCount} label={`${n}問`} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-xs font-bold text-slate-500">難易度</p>
+            <div className="flex gap-2">
+              <Pill value={'easy' as Difficulty} current={difficulty} set={setDifficulty} label="やさしい" />
+              <Pill value={'normal' as Difficulty} current={difficulty} set={setDifficulty} label="ふつう" />
+              <Pill value={'hard' as Difficulty} current={difficulty} set={setDifficulty} label="むずかしい" />
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-xs font-bold text-slate-500">出題形式</p>
+            <div className="flex gap-2">
+              <Pill value={'both' as QuizFormat} current={format} set={setFormat} label="選択＋記述" />
+              <Pill value={'mc' as QuizFormat} current={format} set={setFormat} label="選択のみ" />
+              <Pill value={'written' as QuizFormat} current={format} set={setFormat} label="記述のみ" />
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onGenerate({ count, difficulty, format })}
+          className="mt-5 w-full rounded-card bg-accent py-3 text-sm font-bold text-white shadow-card transition active:scale-95"
+        >
+          🤖 この設定でつくる
+        </button>
+      </div>
     </div>
   );
 }
