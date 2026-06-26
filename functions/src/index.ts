@@ -114,6 +114,12 @@ export const generateQuiz = onCall(
 
     const materialId = String(request.data?.materialId || '');
     const count = Math.min(Math.max(Number(request.data?.count) || 5, 1), 10);
+    const difficulty = ['easy', 'normal', 'hard'].includes(request.data?.difficulty)
+      ? (request.data.difficulty as 'easy' | 'normal' | 'hard')
+      : 'normal';
+    const format = ['mc', 'written', 'both'].includes(request.data?.format)
+      ? (request.data.format as 'mc' | 'written' | 'both')
+      : 'both';
     if (!materialId) throw new HttpsError('invalid-argument', 'materialId が必要です。');
 
     const db = admin.firestore();
@@ -144,7 +150,21 @@ export const generateQuiz = onCall(
     }
     const base64 = buf.toString('base64');
 
-    const prompt = `あなたは${m.subject}の先生です。添付した授業プリントを参考に、同じ単元・レベルの練習問題を${count}問つくってください。
+    const difficultyText = {
+      easy: 'やさしめ（基礎・用語の確認レベル）',
+      normal: 'ふつう（教科書の標準レベル）',
+      hard: 'むずかしめ（応用・発展、入試レベル）',
+    }[difficulty];
+
+    const formatText = {
+      mc: '選択問題（4択, type:"mc"）のみ',
+      written: '記述問題（type:"written"）のみ',
+      both: '選択問題（4択, type:"mc"）と記述問題（type:"written"）を両方',
+    }[format];
+
+    const prompt = `あなたは${m.subject}の先生です。添付した授業プリントを参考に、同じ単元の練習問題を${count}問つくってください。
+難易度は「${difficultyText}」にそろえてください。
+出題形式は ${formatText} で作ってください。
 
 【最重要】生徒は「問題文」しか見られません（プリントや図は見られません）。必ず問題文だけで解けるように作ってください。
 - 「図」「グラフ」「表」「下の」「上の」「次の」「プリントの」などの参照表現は使わないでください。
@@ -152,8 +172,7 @@ export const generateQuiz = onCall(
 - プリントの図そのものを前提にした問題は出さず、条件を文章にした自己完結した新しい問題に作り変えてください。
 
 その他のルール:
-- 選択問題（4択, type:"mc"）と記述問題（type:"written"）を両方ふくめてください。
-- すべて日本語で、プリントの単元に沿った難易度にしてください。
+- すべて日本語で作ってください。
 - 各問題に正解(answer)とやさしい解説(explanation)を必ずつけてください。
 - mc では choices に4つの選択肢を入れ、answer はその中の正解の選択肢の文字列にしてください。
 - written では choices は空配列 [] にし、answer は模範解答にしてください。`;

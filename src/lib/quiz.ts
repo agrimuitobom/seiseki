@@ -17,13 +17,17 @@ export type Quiz = {
   questions: QuizQuestion[];
 };
 
-const callGenerateQuiz = httpsCallable<{ materialId: string; count?: number }, Quiz>(
-  functions,
-  'generateQuiz',
-);
+export type Difficulty = 'easy' | 'normal' | 'hard';
+export type QuizFormat = 'mc' | 'written' | 'both';
+export type GenerateOptions = { count: number; difficulty: Difficulty; format: QuizFormat };
+
+const callGenerateQuiz = httpsCallable<
+  { materialId: string; count: number; difficulty: Difficulty; format: QuizFormat },
+  Quiz
+>(functions, 'generateQuiz');
 
 /** 保存済みプリントから AI で模擬問題を生成する（Cloud Function を呼ぶ）。 */
-export async function generateQuiz(materialId: string, count = 5): Promise<Quiz> {
-  const res = await callGenerateQuiz({ materialId, count });
+export async function generateQuiz(materialId: string, opts: GenerateOptions): Promise<Quiz> {
+  const res = await callGenerateQuiz({ materialId, ...opts });
   return res.data;
 }
