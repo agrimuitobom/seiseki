@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { GradeChart, type GradePoint } from './GradeChart';
-import { SubjectRadar } from './SubjectRadar';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import type { GradePoint } from './GradeChart';
 import { CareerAdvice } from './CareerAdvice';
 import GradeForm from './GradeForm';
-import { useAuth, logout } from '../lib/auth';
-import { useProfile } from '../lib/profile';
+import { useAuth } from '../lib/auth';
+import { useProfile, SCHOOL_LABELS } from '../lib/profile';
 import { watchResults, removeResult, type TestResult } from '../lib/grades';
+
+// recharts を含むチャートは遅延読み込み（初回ロードを軽量化）
+const GradeChart = lazy(() => import('./GradeChart').then((m) => ({ default: m.GradeChart })));
+const SubjectRadar = lazy(() => import('./SubjectRadar').then((m) => ({ default: m.SubjectRadar })));
+
+const ChartSkeleton = () => (
+  <div className="h-52 w-full animate-pulse rounded-[12px] bg-sky-50" />
+);
 import { watchStudyLogs, sumDurationSince, startOfWeek, type StudyLog } from '../lib/study';
 import { watchAssignments, daysUntil, type Assignment } from '../lib/assignments';
 
@@ -36,7 +43,7 @@ function StatCard({
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { subjects } = useProfile();
+  const { subjects, profile } = useProfile();
   const [results, setResults] = useState<TestResult[]>([]);
   const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -87,18 +94,10 @@ export default function Dashboard() {
     <div className="min-h-screen bg-base font-sans text-slate-800">
       {/* ヘッダー: スカイブルーのグラデーション */}
       <header className="rounded-b-[28px] bg-gradient-to-br from-main to-sky-400 px-5 pb-8 pt-6 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm/relaxed opacity-90">こんにちは 👋</p>
-            <h1 className="font-display text-xl font-bold">{user?.email ?? 'ゲスト'}</h1>
-          </div>
-          <button
-            onClick={() => logout()}
-            className="rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold"
-          >
-            ログアウト
-          </button>
-        </div>
+        <p className="text-sm/relaxed opacity-90">こんにちは、{profile.displayName} さん 👋</p>
+        <h1 className="font-display text-xl font-bold">
+          {SCHOOL_LABELS[profile.schoolType]} {profile.grade}
+        </h1>
       </header>
 
       <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-36">
@@ -125,7 +124,9 @@ export default function Dashboard() {
         <CareerAdvice />
 
         {/* 得意・不得意レーダー（全科目の概観） */}
-        <SubjectRadar results={results} subjects={subjects} />
+        <Suspense fallback={<div className="h-72 animate-pulse rounded-card bg-white shadow-card" />}>
+          <SubjectRadar results={results} subjects={subjects} />
+        </Suspense>
 
         {/* 科目セレクター */}
         <section className="flex flex-wrap gap-2">
@@ -157,7 +158,9 @@ export default function Dashboard() {
               </div>
             </div>
           ) : (
-            <GradeChart data={chartData} subjectName={subject} />
+            <Suspense fallback={<ChartSkeleton />}>
+              <GradeChart data={chartData} subjectName={subject} />
+            </Suspense>
           )}
         </section>
 

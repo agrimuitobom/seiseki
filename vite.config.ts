@@ -37,6 +37,24 @@ self.addEventListener('notificationclick', (e) => {
 `;
 
   return {
+    build: {
+      rollupOptions: {
+        output: {
+          // 大きめの依存を別チャンクに分離（初回ロード軽量化・キャッシュ効率UP）
+          manualChunks: {
+            firebase: [
+              'firebase/app',
+              'firebase/auth',
+              'firebase/firestore',
+              'firebase/storage',
+              'firebase/functions',
+              'firebase/messaging',
+            ],
+            recharts: ['recharts'],
+          },
+        },
+      },
+    },
     plugins: [
       react(),
       // FCM 用 Service Worker を dist 直下に生成

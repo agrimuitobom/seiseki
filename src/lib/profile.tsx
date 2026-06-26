@@ -58,18 +58,24 @@ const DEFAULT_PROFILE: Profile = {
   careerGoal: null,
 };
 
+type OnboardingData = { displayName: string; schoolType: SchoolType; grade: string };
+
 type ProfileCtx = {
   profile: Profile;
   subjects: string[];
   loading: boolean;
+  needsOnboarding: boolean;
   save: (patch: Partial<Profile>) => Promise<void>;
+  completeOnboarding: (data: OnboardingData) => Promise<void>;
 };
 
 const Ctx = createContext<ProfileCtx>({
   profile: DEFAULT_PROFILE,
   subjects: DEFAULT_PROFILE.subjects,
   loading: true,
+  needsOnboarding: false,
   save: async () => {},
+  completeOnboarding: async () => {},
 });
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
@@ -77,6 +83,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const defaultName = user?.email?.split('@')[0] ?? 'ゲスト';
   const [profile, setProfile] = useState<Profile>({ ...DEFAULT_PROFILE, displayName: defaultName });
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -95,6 +102,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
               : DEFAULT_SUBJECTS[schoolType],
           careerGoal: (d.careerGoal as CareerGoal) ?? null,
         });
+        // 既存ユーザー（学校設定済み）はオンボーディング不要
+        setNeedsOnboarding(!(d.onboarded || d.schoolType));
+      } else {
+        // 新規ユーザー（プロフィール未作成）
+        setNeedsOnboarding(true);
       }
       setLoading(false);
     });
@@ -116,8 +128,34 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  async function completeOnboarding(data: OnboardingData) {
+    if (!user) return;
+    await setDoc(
+      doc(db, 'users', user.uid),
+      {
+        owner: user.uid,
+        displayName: data.displayName,
+        schoolType: data.schoolType,
+        grade: data.grade,
+        subjects: DEFAULT_SUBJECTS[data.schoolType],
+        onboarded: true,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
+  }
+
   return (
-    <Ctx.Provider value={{ profile, subjects: profile.subjects, loading, save }}>
+    <Ctx.Provider
+      value={{
+        profile,
+        subjects: profile.subjects,
+        loading,
+        needsOnboarding,
+        save,
+        completeOnboarding,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

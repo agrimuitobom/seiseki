@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
-import { ProfileProvider } from './lib/profile';
+import { ProfileProvider, useProfile } from './lib/profile';
 import { listenForegroundMessages } from './lib/messaging';
 import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import Study from './components/Study';
-import Materials from './components/Materials';
-import Weakness from './components/Weakness';
-import Friends from './components/Friends';
-import Settings from './components/Settings';
+
+// タブ画面は遅延読み込み（初回ロードを軽量化）
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Study = lazy(() => import('./components/Study'));
+const Materials = lazy(() => import('./components/Materials'));
+const Weakness = lazy(() => import('./components/Weakness'));
+const Friends = lazy(() => import('./components/Friends'));
+const Settings = lazy(() => import('./components/Settings'));
+const Onboarding = lazy(() => import('./components/Onboarding'));
 
 type Tab = 'home' | 'study' | 'materials' | 'weakness' | 'friends' | 'settings';
 
@@ -20,6 +23,19 @@ const TABS: { id: Tab; label: string; emoji: string }[] = [
   { id: 'friends', label: 'フレンド', emoji: '👥' },
   { id: 'settings', label: '設定', emoji: '⚙️' },
 ];
+
+function Loading() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-base font-sans text-main">
+      <div className="animate-pulse text-center">
+        <div className="mx-auto mb-2 grid h-14 w-14 place-items-center rounded-card bg-gradient-to-br from-main to-sky-400 text-2xl shadow-card">
+          📈
+        </div>
+        <p className="text-sm font-bold">読み込み中…</p>
+      </div>
+    </div>
+  );
+}
 
 function BottomNav({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   return (
@@ -49,30 +65,36 @@ function Shell() {
   }, []);
   return (
     <>
-      {tab === 'home' && <Dashboard />}
-      {tab === 'study' && <Study />}
-      {tab === 'materials' && <Materials />}
-      {tab === 'weakness' && <Weakness />}
-      {tab === 'friends' && <Friends />}
-      {tab === 'settings' && <Settings />}
+      <Suspense fallback={<Loading />}>
+        {tab === 'home' && <Dashboard />}
+        {tab === 'study' && <Study />}
+        {tab === 'materials' && <Materials />}
+        {tab === 'weakness' && <Weakness />}
+        {tab === 'friends' && <Friends />}
+        {tab === 'settings' && <Settings />}
+      </Suspense>
       <BottomNav tab={tab} onChange={setTab} />
     </>
   );
 }
 
+function Gated() {
+  const { loading, needsOnboarding } = useProfile();
+  if (loading) return <Loading />;
+  return (
+    <Suspense fallback={<Loading />}>
+      {needsOnboarding ? <Onboarding /> : <Shell />}
+    </Suspense>
+  );
+}
+
 function Gate() {
   const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-base font-sans text-main">
-        読み込み中…
-      </div>
-    );
-  }
+  if (loading) return <Loading />;
   if (!user) return <Login />;
   return (
     <ProfileProvider>
-      <Shell />
+      <Gated />
     </ProfileProvider>
   );
 }
