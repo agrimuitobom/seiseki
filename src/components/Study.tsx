@@ -110,6 +110,13 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
   const modeRef = useRef<TimerMode>('stopwatch');
   const phaseRef = useRef<Phase>('work');
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const runningRef = useRef(false);
+  const subjectRef = useRef(subject);
+  const wakeRef = useRef<WakeLockSentinel | null>(null);
+
+  useEffect(() => {
+    subjectRef.current = subject;
+  }, [subject]);
 
   useEffect(() => {
     if (!uid) return;
@@ -120,8 +127,44 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
     if (subjects.length > 0 && !subjects.includes(subject)) setSubject(subjects[0]);
   }, [subjects, subject]);
 
-  // アンマウント時にタイマー停止
-  useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
+  // タブ移動などで画面が消えても、計測中の作業ぶんは失わず記録する
+  useEffect(
+    () => () => {
+      if (tickRef.current) clearInterval(tickRef.current);
+      if (
+        runningRef.current &&
+        (modeRef.current !== 'pomodoro' || phaseRef.current === 'work')
+      ) {
+        void saveChunk(startRef.current, Date.now());
+      }
+      releaseWake();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // 画面に戻ってきたら Wake Lock を取り直す（バックグラウンドで解除されるため）
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && runningRef.current) void acquireWake();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 計測中は画面をスリープさせない（未対応ブラウザでは何もしない）
+  async function acquireWake() {
+    try {
+      wakeRef.current = (await navigator.wakeLock?.request('screen')) ?? null;
+    } catch {
+      /* 非対応・省電力モードなどは無視 */
+    }
+  }
+  function releaseWake() {
+    wakeRef.current?.release().catch(() => {});
+    wakeRef.current = null;
+  }
 
   // 停止中にモード・設定を変えたら表示を初期化
   useEffect(() => {
@@ -143,7 +186,7 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
   // 勉強時間として1区間を保存（5秒未満は誤操作とみなし無視）
   async function saveChunk(startedAt: number, endedAt: number) {
     if (endedAt - startedAt >= 5000) {
-      await addStudyLog(uid, subject, startedAt, endedAt);
+      await addStudyLog(uid, subjectRef.current, startedAt, endedAt);
       // フレンド内ランキング用に今週の合計へ加算
       await bumpWeeklyStudy(uid, Math.round((endedAt - startedAt) / 1000)).catch(() => {});
     }
@@ -170,6 +213,8 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
       void saveChunk(startRef.current, startRef.current + phaseLenRef.current * 1000);
       chime();
       clearTick();
+      runningRef.current = false;
+      releaseWake();
       setRunning(false);
       setDisplay(countMin * 60);
       return;
@@ -209,11 +254,15 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
       setDisplay(pomo.work * 60);
     }
     setRunning(true);
+    runningRef.current = true;
+    void acquireWake();
     tickRef.current = setInterval(tick, 250);
   }
 
   async function stop() {
     clearTick();
+    runningRef.current = false;
+    releaseWake();
     setRunning(false);
     const now = Date.now();
     // 作業中（ストップウォッチ／タイマー／ポモドーロの作業局面）なら記録
@@ -370,7 +419,10 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
               <span className="flex items-center gap-2">
                 <span className="font-bold text-main">{fmtDuration(l.durationSec)}</span>
                 <button
-                  onClick={() => removeStudyLog(l.id)}
+                  onClick={() => {
+                    if (confirm(`${l.subject}の記録（${fmtDuration(l.durationSec)}）を削除しますか？`))
+                      removeStudyLog(l.id);
+                  }}
                   aria-label="削除"
                   className="text-slate-300 hover:text-accent"
                 >
@@ -488,7 +540,9 @@ function Assignments({ uid, subjects }: { uid: string; subjects: string[] }) {
                   {badge.text}
                 </span>
                 <button
-                  onClick={() => removeAssignment(a.id)}
+                  onClick={() => {
+                    if (confirm(`「${a.title}」を削除しますか？`)) removeAssignment(a.id);
+                  }}
                   aria-label="削除"
                   className="text-slate-300 hover:text-accent"
                 >

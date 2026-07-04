@@ -15,8 +15,18 @@ const ChartSkeleton = () => (
 );
 import { watchStudyLogs, sumDurationSince, startOfWeek, type StudyLog } from '../lib/study';
 import { watchAssignments, daysUntil, type Assignment } from '../lib/assignments';
+import { calcStreak, calcBadges } from '../lib/achievements';
 
 const pct = (score: number, max: number) => (max > 0 ? Math.round((score / max) * 100) : 0);
+
+/** 時間帯に合わせたあいさつ。 */
+const greeting = () => {
+  const h = new Date().getHours();
+  if (h < 5) return 'おつかれさま';
+  if (h < 11) return 'おはよう';
+  if (h < 18) return 'こんにちは';
+  return 'こんばんは';
+};
 
 function StatCard({
   label,
@@ -90,14 +100,28 @@ export default function Dashboard() {
   const targetPct = latest?.targetScore != null ? pct(latest.targetScore, latest.maxScore) : null;
   const achieve = latestPct != null && targetPct != null ? Math.round((latestPct / targetPct) * 100) : null;
 
+  // 連続記録＆バッジ
+  const streak = useMemo(() => calcStreak(studyLogs), [studyLogs]);
+  const badges = useMemo(() => calcBadges(studyLogs, assignments), [studyLogs, assignments]);
+  const earnedCount = badges.filter((b) => b.earned).length;
+
   return (
     <div className="min-h-screen bg-base font-sans text-slate-800">
       {/* ヘッダー: スカイブルーのグラデーション */}
       <header className="rounded-b-[28px] bg-gradient-to-br from-main to-sky-400 px-5 pb-8 pt-6 text-white">
-        <p className="text-sm/relaxed opacity-90">こんにちは、{profile.displayName} さん 👋</p>
-        <h1 className="font-display text-xl font-bold">
-          {SCHOOL_LABELS[profile.schoolType]} {profile.grade}
-        </h1>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm/relaxed opacity-90">{greeting()}、{profile.displayName} さん 👋</p>
+            <h1 className="font-display text-xl font-bold">
+              {SCHOOL_LABELS[profile.schoolType]} {profile.grade}
+            </h1>
+          </div>
+          {streak > 0 && (
+            <span className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-bold backdrop-blur">
+              🔥 {streak}日連続
+            </span>
+          )}
+        </div>
       </header>
 
       <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-36">
@@ -181,7 +205,9 @@ export default function Dashboard() {
                       <span className="text-xs text-slate-400">/{r.maxScore}</span>
                     </span>
                     <button
-                      onClick={() => removeResult(r.id)}
+                      onClick={() => {
+                        if (confirm(`「${r.testName}」の記録を削除しますか？`)) removeResult(r.id);
+                      }}
                       aria-label="削除"
                       className="text-slate-300 hover:text-accent"
                     >
@@ -193,6 +219,27 @@ export default function Dashboard() {
             </ul>
           </section>
         )}
+
+        {/* 実績バッジ */}
+        <section className="rounded-card bg-white p-4 shadow-card">
+          <h2 className="mb-3 font-display text-sm font-bold">
+            実績バッジ <span className="text-slate-400">（{earnedCount}/{badges.length}）</span>
+          </h2>
+          <div className="grid grid-cols-3 gap-2">
+            {badges.map((b) => (
+              <div
+                key={b.id}
+                className={`rounded-[12px] p-2.5 text-center transition ${
+                  b.earned ? 'bg-sky-50' : 'bg-slate-50 opacity-50 grayscale'
+                }`}
+              >
+                <p className="text-2xl">{b.earned ? b.emoji : '🔒'}</p>
+                <p className="mt-1 text-xs font-bold text-slate-700">{b.name}</p>
+                <p className="mt-0.5 text-[10px] leading-tight text-slate-400">{b.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
 
       {/* 追加ボタン（FAB） */}
