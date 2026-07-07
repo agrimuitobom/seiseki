@@ -7,7 +7,7 @@ import {
   query,
   where,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './firebase';
 
 export type Material = {
@@ -38,13 +38,29 @@ export function watchMaterials(uid: string, cb: (rows: Material[]) => void) {
   });
 }
 
-/** プリントをアップロード（Storage へ保存 → メタdata を Firestore に登録）。 */
-export async function uploadMaterial(uid: string, subject: string, file: File) {
+/**
+ * プリントをアップロード（Storage へ保存 → メタdata を Firestore に登録）。
+ * onProgress には 0〜100 の進捗率が渡る。
+ */
+export async function uploadMaterial(
+  uid: string,
+  subject: string,
+  file: File,
+  onProgress?: (pct: number) => void,
+) {
   const safeName = `${Date.now()}_${file.name.replace(/[^\w.\-ぁ-んァ-ヶ一-龠]/g, '_')}`;
   const storagePath = `materials/${uid}/${subject}/${safeName}`;
   const storageRef = ref(storage, storagePath);
 
-  await uploadBytes(storageRef, file, { contentType: file.type });
+  const task = uploadBytesResumable(storageRef, file, { contentType: file.type });
+  await new Promise<void>((resolve, reject) => {
+    task.on(
+      'state_changed',
+      (s) => onProgress?.(s.totalBytes > 0 ? (s.bytesTransferred / s.totalBytes) * 100 : 0),
+      reject,
+      resolve,
+    );
+  });
   const downloadURL = await getDownloadURL(storageRef);
 
   await addDoc(colRef, {

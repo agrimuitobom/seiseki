@@ -26,6 +26,7 @@ export type Profile = {
   schoolType: SchoolType;
   grade: string;
   subjects: string[];
+  subjectColors: Record<string, string>; // 教科 → パステルカラー(hex)
   careerGoal: CareerGoal | null;
 };
 
@@ -55,6 +56,7 @@ const DEFAULT_PROFILE: Profile = {
   schoolType: '中',
   grade: '1年',
   subjects: DEFAULT_SUBJECTS['中'],
+  subjectColors: {},
   careerGoal: null,
 };
 
@@ -100,6 +102,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             Array.isArray(d.subjects) && d.subjects.length > 0
               ? d.subjects
               : DEFAULT_SUBJECTS[schoolType],
+          subjectColors: (d.subjectColors as Record<string, string>) ?? {},
           careerGoal: (d.careerGoal as CareerGoal) ?? null,
         });
         // 既存ユーザー（学校設定済み）はオンボーディング不要

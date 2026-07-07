@@ -9,13 +9,17 @@ import { watchResults, removeResult, type TestResult } from '../lib/grades';
 // recharts を含むチャートは遅延読み込み（初回ロードを軽量化）
 const GradeChart = lazy(() => import('./GradeChart').then((m) => ({ default: m.GradeChart })));
 const SubjectRadar = lazy(() => import('./SubjectRadar').then((m) => ({ default: m.SubjectRadar })));
+const AllSubjectsChart = lazy(() =>
+  import('./AllSubjectsChart').then((m) => ({ default: m.AllSubjectsChart })),
+);
 
 const ChartSkeleton = () => (
   <div className="h-52 w-full animate-pulse rounded-[12px] bg-sky-50" />
 );
 import { watchStudyLogs, sumDurationSince, startOfWeek, type StudyLog } from '../lib/study';
-import { watchAssignments, daysUntil, type Assignment } from '../lib/assignments';
+import { watchAssignments, setAssignmentDone, daysUntil, type Assignment } from '../lib/assignments';
 import { calcStreak, calcBadges } from '../lib/achievements';
+import { subjectColor, deepen } from '../lib/colors';
 
 const pct = (score: number, max: number) => (max > 0 ? Math.round((score / max) * 100) : 0);
 
@@ -144,6 +148,9 @@ export default function Dashboard() {
           />
         </section>
 
+        {/* 提出物一覧（未完了のタスク） */}
+        <HomeAssignments assignments={assignments} colors={profile.subjectColors} />
+
         {/* 進路アドバイス（Gemini） */}
         <CareerAdvice />
 
@@ -152,19 +159,33 @@ export default function Dashboard() {
           <SubjectRadar results={results} subjects={subjects} />
         </Suspense>
 
-        {/* 科目セレクター */}
+        {/* 記録グラフ（全教科の推移） */}
+        <section className="rounded-card bg-white p-4 shadow-card">
+          <h2 className="mb-2 font-display text-sm font-bold">全教科の記録グラフ（得点率）</h2>
+          <Suspense fallback={<ChartSkeleton />}>
+            <AllSubjectsChart results={results} subjects={subjects} colors={profile.subjectColors} />
+          </Suspense>
+        </section>
+
+        {/* 科目セレクター（教科カラー） */}
         <section className="flex flex-wrap gap-2">
-          {subjects.map((s) => (
-            <button
-              key={s}
-              onClick={() => setSubject(s)}
-              className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
-                subject === s ? 'bg-main text-white shadow-card' : 'bg-white text-main shadow-card'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
+          {subjects.map((s) => {
+            const c = subjectColor(s, profile.subjectColors);
+            return (
+              <button
+                key={s}
+                onClick={() => setSubject(s)}
+                className="rounded-full px-3 py-1.5 text-sm font-bold shadow-card transition"
+                style={
+                  subject === s
+                    ? { backgroundColor: c, color: deepen(c, 0.6) }
+                    : { backgroundColor: 'white', color: deepen(c, 0.45) }
+                }
+              >
+                {s}
+              </button>
+            );
+          })}
         </section>
 
         {/* 成績グラフ */}
@@ -254,5 +275,72 @@ export default function Dashboard() {
         <GradeForm uid={user.uid} defaultSubject={subject} onClose={() => setShowForm(false)} />
       )}
     </div>
+  );
+}
+
+/** ホームに出す提出物一覧（未完了のみ・期限が近い順）。 */
+function HomeAssignments({
+  assignments,
+  colors,
+}: {
+  assignments: Assignment[];
+  colors: Record<string, string>;
+}) {
+  const undone = [...assignments]
+    .filter((a) => !a.done)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  return (
+    <section className="rounded-card bg-white p-4 shadow-card">
+      <h2 className="mb-2 font-display text-sm font-bold">
+        📌 提出物 <span className="text-slate-400">（{undone.length}件）</span>
+      </h2>
+      {undone.length === 0 ? (
+        <p className="py-2 text-center text-sm text-slate-400">未完了の提出物はありません 🎉</p>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {undone.map((a) => {
+            const d = daysUntil(a.dueDate);
+            const badge =
+              d < 0
+                ? { text: `${-d}日超過`, cls: 'bg-accent/10 text-accent' }
+                : d === 0
+                  ? { text: '今日まで', cls: 'bg-accent/10 text-accent' }
+                  : d <= 2
+                    ? { text: `あと${d}日`, cls: 'bg-accent/10 text-accent' }
+                    : { text: `あと${d}日`, cls: 'bg-sky-100 text-main' };
+            const c = a.subject ? subjectColor(a.subject, colors) : null;
+            return (
+              <li key={a.id} className="flex items-center gap-3 py-2.5 text-sm">
+                <button
+                  onClick={() => setAssignmentDone(a.id, true)}
+                  aria-label="完了にする"
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 border-slate-300 text-transparent transition hover:border-success hover:text-success"
+                >
+                  ✓
+                </button>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold text-slate-700">{a.title}</p>
+                  <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                    {a.subject && c && (
+                      <span
+                        className="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                        style={{ backgroundColor: c, color: deepen(c, 0.6) }}
+                      >
+                        {a.subject}
+                      </span>
+                    )}
+                    {a.dueDate}
+                  </p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${badge.cls}`}>
+                  {badge.text}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

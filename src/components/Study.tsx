@@ -21,6 +21,8 @@ import {
   type Assignment,
 } from '../lib/assignments';
 import { bumpWeeklyStudy } from '../lib/social';
+import { subjectColor, deepen } from '../lib/colors';
+import { WheelPicker } from './WheelPicker';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -33,21 +35,90 @@ const MODES: { id: TimerMode; label: string; emoji: string }[] = [
   { id: 'pomodoro', label: 'ポモドーロ', emoji: '🍅' },
 ];
 
-// タイマー（カウントダウン）の分プリセット
-const COUNT_PRESETS = [10, 15, 25, 45, 60];
 // ポモドーロの「作業/休憩」プリセット（分）
 const POMO_PRESETS: { work: number; break: number }[] = [
   { work: 25, break: 5 },
   { work: 50, break: 10 },
 ];
 
-/** 残り時間表示用 MM:SS。 */
-const fmtMMSS = (sec: number) => {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(m)}:${pad(s)}`;
+/**
+ * 実行中のタイマーセッション。localStorage に保存し、
+ * アプリを閉じたり他のタブへ移動しても計測を継続できるようにする。
+ * 表示・記録はすべてタイムスタンプから計算する（JSが止まっていてもズレない）。
+ */
+type TimerSession = {
+  mode: TimerMode;
+  subject: string;
+  startedAt: number; // セッション開始(ms)
+  phase: Phase; // ポモドーロの局面
+  phaseStartedAt: number; // 現在の局面の開始(ms)
+  phaseLenSec: number; // 現在の局面の長さ(秒)。0=ストップウォッチ（無限）
+  cycles: number; // 完了した作業セット数
+  pomoWork: number; // 分
+  pomoBreak: number; // 分
 };
+
+const SESSION_KEY = 'seiseki.timerSession';
+
+function loadSession(): TimerSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? (JSON.parse(raw) as TimerSession) : null;
+  } catch {
+    return null;
+  }
+}
+function storeSession(s: TimerSession | null) {
+  try {
+    if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* プライベートモードなどは無視 */
+  }
+}
+
+/**
+ * 現在時刻まで局面の切り替えを進める（バックグラウンド中に過ぎた分を追いつく）。
+ * 返り値: 最新セッション（終了時は null）と、勉強時間として保存すべき区間。
+ */
+function advanceSession(
+  s: TimerSession,
+  now: number,
+): { next: TimerSession | null; chunks: { start: number; end: number }[]; transitions: number } {
+  const chunks: { start: number; end: number }[] = [];
+  let transitions = 0;
+  if (s.mode === 'stopwatch') return { next: s, chunks, transitions };
+
+  let cur = { ...s };
+  while (now - cur.phaseStartedAt >= cur.phaseLenSec * 1000) {
+    const end = cur.phaseStartedAt + cur.phaseLenSec * 1000;
+    transitions++;
+    if (cur.mode === 'countdown') {
+      // カウントダウン終了：設定時間ぶんを勉強として保存して終わり
+      chunks.push({ start: cur.phaseStartedAt, end });
+      return { next: null, chunks, transitions };
+    }
+    if (cur.phase === 'work') {
+      chunks.push({ start: cur.phaseStartedAt, end });
+      cur = {
+        ...cur,
+        phase: 'break',
+        phaseStartedAt: end,
+        phaseLenSec: cur.pomoBreak * 60,
+        cycles: cur.cycles + 1,
+      };
+    } else {
+      cur = { ...cur, phase: 'work', phaseStartedAt: end, phaseLenSec: cur.pomoWork * 60 };
+    }
+  }
+  return { next: cur, chunks, transitions };
+}
+
+/** 表示する秒数（ストップウォッチ=経過、それ以外=残り）。 */
+function calcDisplay(s: TimerSession, now: number): number {
+  if (s.mode === 'stopwatch') return Math.max(0, Math.floor((now - s.startedAt) / 1000));
+  return Math.max(0, Math.ceil((s.phaseStartedAt + s.phaseLenSec * 1000 - now) / 1000));
+}
 
 /** 区切りの合図（短いビープ＋バイブ）。失敗しても無視。 */
 function chime() {
@@ -75,6 +146,8 @@ function chime() {
   }
 }
 
+const APP_TITLE = 'Seiseki｜成績管理・学習支援';
+
 export default function Study() {
   const { user } = useAuth();
   const { subjects } = useProfile();
@@ -95,28 +168,25 @@ export default function Study() {
 }
 
 function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
+  const { profile } = useProfile();
   const [logs, setLogs] = useState<StudyLog[]>([]);
   const [subject, setSubject] = useState(subjects[0]);
   const [mode, setMode] = useState<TimerMode>('stopwatch');
-  const [running, setRunning] = useState(false);
-  const [display, setDisplay] = useState(0); // 表示する秒（経過 or 残り）
-  const [countMin, setCountMin] = useState(25); // タイマーの設定分
-  const [pomo, setPomo] = useState(POMO_PRESETS[0]); // ポモドーロ設定
-  const [phase, setPhase] = useState<Phase>('work'); // ポモドーロの局面
-  const [cycles, setCycles] = useState(0); // 完了した作業セット数
+  const [session, setSession] = useState<TimerSession | null>(null);
+  const [display, setDisplay] = useState(0);
+  // タイマー（カウントダウン）のダイヤル設定
+  const [countH, setCountH] = useState(0);
+  const [countM, setCountM] = useState(25);
+  const [countS, setCountS] = useState(0);
+  const [pomo, setPomo] = useState(POMO_PRESETS[0]);
 
-  const startRef = useRef<number>(0); // 現在の局面の開始時刻(ms)
-  const phaseLenRef = useRef<number>(0); // 現在の局面の長さ(秒)。0=ストップウォッチ
-  const modeRef = useRef<TimerMode>('stopwatch');
-  const phaseRef = useRef<Phase>('work');
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const runningRef = useRef(false);
-  const subjectRef = useRef(subject);
+  const sessionRef = useRef<TimerSession | null>(null);
   const wakeRef = useRef<WakeLockSentinel | null>(null);
+  const running = session != null;
 
   useEffect(() => {
-    subjectRef.current = subject;
-  }, [subject]);
+    sessionRef.current = session;
+  }, [session]);
 
   useEffect(() => {
     if (!uid) return;
@@ -124,34 +194,8 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
   }, [uid]);
 
   useEffect(() => {
-    if (subjects.length > 0 && !subjects.includes(subject)) setSubject(subjects[0]);
-  }, [subjects, subject]);
-
-  // タブ移動などで画面が消えても、計測中の作業ぶんは失わず記録する
-  useEffect(
-    () => () => {
-      if (tickRef.current) clearInterval(tickRef.current);
-      if (
-        runningRef.current &&
-        (modeRef.current !== 'pomodoro' || phaseRef.current === 'work')
-      ) {
-        void saveChunk(startRef.current, Date.now());
-      }
-      releaseWake();
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  // 画面に戻ってきたら Wake Lock を取り直す（バックグラウンドで解除されるため）
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible' && runningRef.current) void acquireWake();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!running && subjects.length > 0 && !subjects.includes(subject)) setSubject(subjects[0]);
+  }, [subjects, subject, running]);
 
   // 計測中は画面をスリープさせない（未対応ブラウザでは何もしない）
   async function acquireWake() {
@@ -166,120 +210,148 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
     wakeRef.current = null;
   }
 
-  // 停止中にモード・設定を変えたら表示を初期化
-  useEffect(() => {
-    if (running) return;
-    if (mode === 'stopwatch') setDisplay(0);
-    else if (mode === 'countdown') setDisplay(countMin * 60);
-    else {
-      setPhase('work');
-      setCycles(0);
-      setDisplay(pomo.work * 60);
-    }
-  }, [mode, countMin, pomo, running]);
-
-  const clearTick = () => {
-    if (tickRef.current) clearInterval(tickRef.current);
-    tickRef.current = null;
-  };
-
   // 勉強時間として1区間を保存（5秒未満は誤操作とみなし無視）
-  async function saveChunk(startedAt: number, endedAt: number) {
-    if (endedAt - startedAt >= 5000) {
-      await addStudyLog(uid, subjectRef.current, startedAt, endedAt);
-      // フレンド内ランキング用に今週の合計へ加算
-      await bumpWeeklyStudy(uid, Math.round((endedAt - startedAt) / 1000)).catch(() => {});
-    }
+  async function saveChunkFor(subj: string, startedAt: number, endedAt: number) {
+    if (endedAt - startedAt < 5000) return;
+    await addStudyLog(uid, subj, startedAt, endedAt);
+    // フレンド内ランキング用に今週の合計へ加算
+    await bumpWeeklyStudy(uid, Math.round((endedAt - startedAt) / 1000)).catch(() => {});
   }
 
-  function tick() {
-    const now = Date.now();
-    const sec = Math.floor((now - startRef.current) / 1000);
-
-    if (modeRef.current === 'stopwatch') {
-      setDisplay(sec);
-      return;
-    }
-
-    const rem = phaseLenRef.current - sec;
-    if (rem > 0) {
-      setDisplay(rem);
-      return;
-    }
-
-    // 局面終了
-    if (modeRef.current === 'countdown') {
-      // 設定時間ぶんを勉強として記録して終了
-      void saveChunk(startRef.current, startRef.current + phaseLenRef.current * 1000);
-      chime();
-      clearTick();
-      runningRef.current = false;
-      releaseWake();
-      setRunning(false);
-      setDisplay(countMin * 60);
-      return;
-    }
-
-    // ポモドーロ：作業↔休憩を切り替え
-    if (phaseRef.current === 'work') {
-      void saveChunk(startRef.current, now); // 作業ぶんを記録
-      setCycles((c) => c + 1);
-      phaseRef.current = 'break';
-      setPhase('break');
-      phaseLenRef.current = pomo.break * 60;
+  // 局面の追いつき＋state/localStorage への反映
+  function applyAdvance(s: TimerSession, now: number, withChime: boolean) {
+    const { next, chunks, transitions } = advanceSession(s, now);
+    for (const c of chunks) void saveChunkFor(s.subject, c.start, c.end);
+    if (transitions > 0 && withChime) chime();
+    storeSession(next);
+    setSession(next);
+    if (next) {
+      setMode(next.mode);
+      setSubject(next.subject);
+      setDisplay(calcDisplay(next, now));
     } else {
-      phaseRef.current = 'work';
-      setPhase('work');
-      phaseLenRef.current = pomo.work * 60;
+      releaseWake();
+      setDisplay(0);
     }
-    startRef.current = now;
-    setDisplay(phaseLenRef.current);
-    chime();
+    return next;
   }
+
+  // 起動時：進行中のセッションがあれば復元（アプリを閉じていた間の分も追いつく）
+  useEffect(() => {
+    const s = loadSession();
+    if (s) applyAdvance(s, Date.now(), false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 計測ループ（表示更新＋局面切り替え）
+  useEffect(() => {
+    if (!session) return;
+    const iv = setInterval(() => {
+      const now = Date.now();
+      if (session.mode !== 'stopwatch' && now - session.phaseStartedAt >= session.phaseLenSec * 1000) {
+        applyAdvance(session, now, true);
+      } else {
+        setDisplay(calcDisplay(session, now));
+      }
+    }, 250);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
+  // タブタイトルにも経過を表示（PC で別タブにいても見える）
+  useEffect(() => {
+    if (!session) {
+      document.title = APP_TITLE;
+      return;
+    }
+    document.title = `${fmtClock(display)} ⏱ ${session.subject}`;
+    return () => {
+      document.title = APP_TITLE;
+    };
+  }, [session, display]);
+
+  // バックグラウンド時：通知領域に計測中の状態を表示（対応端末・通知許可済みのみ）
+  useEffect(() => {
+    const onVis = async () => {
+      const s = sessionRef.current;
+      if (document.visibilityState === 'hidden') {
+        if (!s) return;
+        try {
+          if (!('Notification' in window) || Notification.permission !== 'granted') return;
+          const reg = await navigator.serviceWorker?.getRegistration();
+          const label =
+            s.mode === 'pomodoro' ? (s.phase === 'work' ? '（作業中🍅）' : '（休憩中☕）') : '';
+          await reg?.showNotification('⏱️ 計測をつづけています', {
+            body: `${s.subject}${label} — アプリに戻ると経過が反映されます`,
+            tag: 'seiseki-timer',
+            silent: true,
+            icon: '/pwa-192x192.png',
+            badge: '/pwa-192x192.png',
+          });
+        } catch {
+          /* 通知が使えない環境は無視 */
+        }
+      } else {
+        // 戻ってきたら追いつき＋WakeLock再取得＋通知を消す
+        if (s) {
+          applyAdvance(s, Date.now(), false);
+          void acquireWake();
+        }
+        try {
+          const reg = await navigator.serviceWorker?.getRegistration();
+          (await reg?.getNotifications({ tag: 'seiseki-timer' }))?.forEach((n) => n.close());
+        } catch {
+          /* 無視 */
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // アンマウント時：WakeLock だけ解放（セッションは localStorage で継続）
+  useEffect(() => () => releaseWake(), []);
+
+  const countTotal = countH * 3600 + countM * 60 + countS;
 
   function start() {
-    modeRef.current = mode;
-    startRef.current = Date.now();
+    const now = Date.now();
+    const base = {
+      subject,
+      startedAt: now,
+      phase: 'work' as Phase,
+      phaseStartedAt: now,
+      cycles: 0,
+      pomoWork: pomo.work,
+      pomoBreak: pomo.break,
+    };
+    let s: TimerSession;
     if (mode === 'stopwatch') {
-      phaseLenRef.current = 0;
-      setDisplay(0);
+      s = { ...base, mode, phaseLenSec: 0 };
     } else if (mode === 'countdown') {
-      phaseLenRef.current = countMin * 60;
-      setDisplay(countMin * 60);
+      if (countTotal <= 0) return;
+      s = { ...base, mode, phaseLenSec: countTotal };
     } else {
-      phaseRef.current = 'work';
-      setPhase('work');
-      setCycles(0);
-      phaseLenRef.current = pomo.work * 60;
-      setDisplay(pomo.work * 60);
+      s = { ...base, mode, phaseLenSec: pomo.work * 60 };
     }
-    setRunning(true);
-    runningRef.current = true;
+    storeSession(s);
+    setSession(s);
+    setDisplay(calcDisplay(s, now));
     void acquireWake();
-    tickRef.current = setInterval(tick, 250);
   }
 
   async function stop() {
-    clearTick();
-    runningRef.current = false;
-    releaseWake();
-    setRunning(false);
+    const s = sessionRef.current;
+    if (!s) return;
     const now = Date.now();
-    // 作業中（ストップウォッチ／タイマー／ポモドーロの作業局面）なら記録
-    if (
-      modeRef.current === 'stopwatch' ||
-      modeRef.current === 'countdown' ||
-      phaseRef.current === 'work'
-    ) {
-      await saveChunk(startRef.current, now);
-    }
-    // 表示を初期化
-    if (mode === 'stopwatch') setDisplay(0);
-    else if (mode === 'countdown') setDisplay(countMin * 60);
-    else {
-      setPhase('work');
-      setCycles(0);
-      setDisplay(pomo.work * 60);
+    storeSession(null);
+    setSession(null);
+    releaseWake();
+    setDisplay(0);
+    // 作業中のぶんを記録（ポモドーロの休憩中は記録しない）
+    if (s.mode !== 'pomodoro' || s.phase === 'work') {
+      await saveChunkFor(s.subject, s.phaseStartedAt, now);
     }
   }
 
@@ -287,13 +359,13 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
   const weekSec = useMemo(() => sumDurationSince(logs, startOfWeek()), [logs]);
   const recent = logs.slice(0, 5);
 
-  const onBreak = mode === 'pomodoro' && phase === 'break';
-  const statusText =
-    mode === 'pomodoro'
-      ? `${phase === 'work' ? '作業中 🍅' : '休憩中 ☕'}・完了 ${cycles} セット`
-      : running
-        ? `${subject} を勉強中`
-        : subject;
+  const onBreak = session?.mode === 'pomodoro' && session.phase === 'break';
+  const activeSubject = session?.subject ?? subject;
+  const statusText = session
+    ? session.mode === 'pomodoro'
+      ? `${session.phase === 'work' ? '作業中 🍅' : '休憩中 ☕'}・完了 ${session.cycles} セット`
+      : `${session.subject} を勉強中`
+    : subject;
 
   return (
     <section className="rounded-card bg-white p-5 shadow-card">
@@ -318,18 +390,12 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
 
       {/* モード別の設定（停止中のみ） */}
       {!running && mode === 'countdown' && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {COUNT_PRESETS.map((min) => (
-            <button
-              key={min}
-              onClick={() => setCountMin(min)}
-              className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
-                countMin === min ? 'bg-main text-white' : 'bg-sky-100 text-main'
-              }`}
-            >
-              {min}分
-            </button>
-          ))}
+        <div className="mb-3 flex items-center justify-center gap-1 rounded-card bg-white">
+          <WheelPicker value={countH} onChange={setCountH} max={9} label="時間" />
+          <span className="pb-5 font-display text-xl font-bold text-slate-300">:</span>
+          <WheelPicker value={countM} onChange={setCountM} max={59} label="分" />
+          <span className="pb-5 font-display text-xl font-bold text-slate-300">:</span>
+          <WheelPicker value={countS} onChange={setCountS} max={59} label="秒" />
         </div>
       )}
       {!running && mode === 'pomodoro' && (
@@ -348,20 +414,27 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
         </div>
       )}
 
-      {/* 科目 */}
+      {/* 科目（教科カラー） */}
       <div className="mb-3 flex flex-wrap gap-2">
-        {subjects.map((s) => (
-          <button
-            key={s}
-            disabled={running}
-            onClick={() => setSubject(s)}
-            className={`rounded-full px-3 py-1.5 text-sm font-bold transition disabled:opacity-50 ${
-              subject === s ? 'bg-main text-white' : 'bg-sky-100 text-main'
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+        {subjects.map((s) => {
+          const c = subjectColor(s, profile.subjectColors);
+          const selected = activeSubject === s;
+          return (
+            <button
+              key={s}
+              disabled={running}
+              onClick={() => setSubject(s)}
+              className="rounded-full px-3 py-1.5 text-sm font-bold transition disabled:opacity-60"
+              style={
+                selected
+                  ? { backgroundColor: c, color: deepen(c, 0.6) }
+                  : { backgroundColor: '#F1F5F9', color: deepen(c, 0.45) }
+              }
+            >
+              {s}
+            </button>
+          );
+        })}
       </div>
 
       {/* 表示 */}
@@ -370,17 +443,18 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
           onBreak ? 'text-success' : 'text-main'
         }`}
       >
-        {mode === 'stopwatch' ? fmtClock(display) : fmtMMSS(display)}
+        {fmtClock(display)}
       </p>
       <p className="mb-4 text-center text-xs text-slate-400">{statusText}</p>
 
       {!running ? (
         <button
           onClick={start}
-          className="w-full rounded-card bg-success py-3 text-sm font-bold text-white shadow-card transition active:scale-95"
+          disabled={mode === 'countdown' && countTotal <= 0}
+          className="w-full rounded-card bg-success py-3 text-sm font-bold text-white shadow-card transition active:scale-95 disabled:opacity-40"
         >
           ▶ スタート
-          {mode === 'countdown' && `（${countMin}分）`}
+          {mode === 'countdown' && countTotal > 0 && `（${fmtDuration(countTotal)}）`}
           {mode === 'pomodoro' && `（作業${pomo.work}分）`}
         </button>
       ) : (
@@ -390,6 +464,11 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
         >
           {onBreak ? '■ ストップ' : '■ ストップして記録'}
         </button>
+      )}
+      {running && (
+        <p className="mt-2 text-center text-[11px] text-slate-400">
+          アプリを閉じたり他のタブへ移動しても、計測はつづきます
+        </p>
       )}
 
       {/* 合計 */}
@@ -407,30 +486,38 @@ function Timer({ uid, subjects }: { uid: string; subjects: string[] }) {
       {/* 最近の記録 */}
       {recent.length > 0 && (
         <ul className="mt-3 divide-y divide-slate-100">
-          {recent.map((l) => (
-            <li key={l.id} className="flex items-center justify-between py-2 text-sm">
-              <span>
-                <span className="font-bold text-slate-700">{l.subject}</span>
-                <span className="ml-2 text-xs text-slate-400">
-                  {new Date(l.startedAt).toLocaleDateString()}{' '}
-                  {new Date(l.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {recent.map((l) => {
+            const c = subjectColor(l.subject, profile.subjectColors);
+            return (
+              <li key={l.id} className="flex items-center justify-between py-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-bold"
+                    style={{ backgroundColor: c, color: deepen(c, 0.6) }}
+                  >
+                    {l.subject}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {new Date(l.startedAt).toLocaleDateString()}{' '}
+                    {new Date(l.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </span>
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="font-bold text-main">{fmtDuration(l.durationSec)}</span>
-                <button
-                  onClick={() => {
-                    if (confirm(`${l.subject}の記録（${fmtDuration(l.durationSec)}）を削除しますか？`))
-                      removeStudyLog(l.id);
-                  }}
-                  aria-label="削除"
-                  className="text-slate-300 hover:text-accent"
-                >
-                  🗑
-                </button>
-              </span>
-            </li>
-          ))}
+                <span className="flex items-center gap-2">
+                  <span className="font-bold text-main">{fmtDuration(l.durationSec)}</span>
+                  <button
+                    onClick={() => {
+                      if (confirm(`${l.subject}の記録（${fmtDuration(l.durationSec)}）を削除しますか？`))
+                        removeStudyLog(l.id);
+                    }}
+                    aria-label="削除"
+                    className="text-slate-300 hover:text-accent"
+                  >
+                    🗑
+                  </button>
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
