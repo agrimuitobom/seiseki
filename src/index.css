@@ -9,3 +9,12 @@ html {
 body {
   margin: 0;
 }
+
+/* ダイヤル式ピッカーのスクロールバーを隠す */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

@@ -10,11 +10,13 @@ import {
   CAREER_TYPES,
   type SchoolType,
 } from '../lib/profile';
+import { subjectColor, deepen, PASTEL_PALETTE } from '../lib/colors';
 
 export default function Settings() {
   const { user } = useAuth();
   const { profile, save } = useProfile();
   const [newSubject, setNewSubject] = useState('');
+  const [colorTarget, setColorTarget] = useState<string | null>(null);
   const [name, setName] = useState(profile.displayName);
   const [notifMsg, setNotifMsg] = useState<string | null>(null);
   const [notifBusy, setNotifBusy] = useState(false);
@@ -50,6 +52,8 @@ export default function Settings() {
     }
     save({ subjects: [...profile.subjects, name] });
     setNewSubject('');
+    // 追加した教科の色をその場で選んでもらう
+    setColorTarget(name);
   }
 
   function removeSubject(name: string) {
@@ -140,22 +144,33 @@ export default function Settings() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {profile.subjects.map((s) => (
-              <span
-                key={s}
-                className="flex items-center gap-1 rounded-full bg-sky-100 py-1.5 pl-3 pr-1.5 text-sm font-bold text-main"
-              >
-                {s}
-                <button
-                  onClick={() => removeSubject(s)}
-                  aria-label={`${s}を削除`}
-                  disabled={profile.subjects.length <= 1}
-                  className="grid h-5 w-5 place-items-center rounded-full text-main/60 hover:bg-white hover:text-accent disabled:opacity-30"
+            {profile.subjects.map((s) => {
+              const c = subjectColor(s, profile.subjectColors);
+              return (
+                <span
+                  key={s}
+                  className="flex items-center gap-0.5 rounded-full py-1.5 pl-3 pr-1.5 text-sm font-bold"
+                  style={{ backgroundColor: c, color: deepen(c, 0.6) }}
                 >
-                  ✕
-                </button>
-              </span>
-            ))}
+                  {s}
+                  <button
+                    onClick={() => setColorTarget(s)}
+                    aria-label={`${s}の色を変更`}
+                    className="grid h-5 w-5 place-items-center rounded-full text-xs hover:bg-white/60"
+                  >
+                    🎨
+                  </button>
+                  <button
+                    onClick={() => removeSubject(s)}
+                    aria-label={`${s}を削除`}
+                    disabled={profile.subjects.length <= 1}
+                    className="grid h-5 w-5 place-items-center rounded-full opacity-60 hover:bg-white/60 hover:text-accent disabled:opacity-30"
+                  >
+                    ✕
+                  </button>
+                </span>
+              );
+            })}
           </div>
 
           <div className="mt-3 flex gap-2">
@@ -174,7 +189,7 @@ export default function Settings() {
             </button>
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            ここで編集した科目が、成績入力・グラフ・プリントに反映されます。
+            ここで編集した科目が、成績入力・グラフ・プリントに反映されます。🎨 をタップすると教科の色を変えられます。
           </p>
         </section>
 
@@ -246,6 +261,103 @@ export default function Settings() {
           </button>
         </section>
       </main>
+
+      {colorTarget && (
+        <ColorPicker
+          subject={colorTarget}
+          current={subjectColor(colorTarget, profile.subjectColors)}
+          onSave={(color) => {
+            save({ subjectColors: { ...profile.subjectColors, [colorTarget]: color } });
+            setColorTarget(null);
+          }}
+          onClose={() => setColorTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 教科カラーの選択モーダル。カラーチャート＋基本の淡い10色パレット。 */
+function ColorPicker({
+  subject,
+  current,
+  onSave,
+  onClose,
+}: {
+  subject: string;
+  current: string;
+  onSave: (color: string) => void;
+  onClose: () => void;
+}) {
+  const [color, setColor] = useState(current);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-end bg-black/30 sm:place-items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-t-[24px] bg-white p-5 shadow-card sm:rounded-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg font-bold text-main">教科の色をえらぶ</h2>
+          <button onClick={onClose} aria-label="閉じる" className="text-slate-400">
+            ✕
+          </button>
+        </div>
+
+        {/* プレビュー */}
+        <div className="mb-4 text-center">
+          <span
+            className="inline-block rounded-full px-4 py-1.5 text-sm font-bold"
+            style={{ backgroundColor: color, color: deepen(color, 0.6) }}
+          >
+            {subject}
+          </span>
+        </div>
+
+        <div className="flex items-start gap-4">
+          {/* カラーチャート */}
+          <label className="flex shrink-0 cursor-pointer flex-col items-center gap-1">
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="h-16 w-16 cursor-pointer rounded-[12px] border border-slate-200 bg-white p-1"
+            />
+            <span className="text-xs font-bold text-slate-500">カラーチャート</span>
+          </label>
+
+          {/* 基本の淡い10色 */}
+          <div className="flex-1">
+            <div className="grid grid-cols-5 gap-2">
+              {PASTEL_PALETTE.map((p) => (
+                <button
+                  key={p.color}
+                  title={p.name}
+                  aria-label={p.name}
+                  onClick={() => setColor(p.color)}
+                  className={`h-10 w-10 rounded-full border-4 transition active:scale-95 ${
+                    color.toLowerCase() === p.color.toLowerCase()
+                      ? 'border-main'
+                      : 'border-transparent'
+                  }`}
+                  style={{ backgroundColor: p.color }}
+                />
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-slate-400">おすすめの淡い色（基本の10色）</p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onSave(color)}
+          className="mt-5 w-full rounded-card bg-main py-3 text-sm font-bold text-white shadow-card transition active:scale-95"
+        >
+          この色にする
+        </button>
+      </div>
     </div>
   );
 }

@@ -15,6 +15,8 @@ import {
   type QuizFormat,
 } from '../lib/quiz';
 import Quiz from './Quiz';
+import { ProgressBar } from './ProgressBar';
+import { subjectColor, deepen } from '../lib/colors';
 
 const ACCEPT = 'image/*,application/pdf';
 const MAX_BYTES = 20 * 1024 * 1024; // 20MB
@@ -26,7 +28,7 @@ const fileIcon = (type: string) => (type === 'application/pdf' ? '📄' : '🖼�
 
 export default function Materials() {
   const { user } = useAuth();
-  const { subjects } = useProfile();
+  const { subjects, profile } = useProfile();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [subject, setSubject] = useState<string>(subjects[0]);
   const [busy, setBusy] = useState(false);
@@ -35,18 +37,33 @@ export default function Materials() {
   const [quizzingId, setQuizzingId] = useState<string | null>(null);
   const [activeQuiz, setActiveQuiz] = useState<QuizType | null>(null);
   const [optionMaterial, setOptionMaterial] = useState<Material | null>(null);
+  // 進捗バー（アップロード / AI生成）
+  const [upProg, setUpProg] = useState<{ pct: number; name: string } | null>(null);
+  const [genProg, setGenProg] = useState<{ pct: number; label: string } | null>(null);
 
   async function handleGenerate(m: Material, opts: GenerateOptions) {
     setError(null);
     setOptionMaterial(null);
     setQuizzingId(m.id);
+    // Cloud Functions からは進捗が取れないため、段階メッセージ付きの擬似進捗で表示する
+    let pct = 0;
+    setGenProg({ pct: 0, label: 'プリントを送信中…' });
+    const iv = setInterval(() => {
+      pct = Math.min(pct + Math.random() * 3 + 1, 95);
+      const label =
+        pct < 25 ? 'プリントを送信中…' : pct < 60 ? 'AIがプリントを読み取り中…' : '問題を作成中…';
+      setGenProg({ pct, label });
+    }, 400);
     try {
       const quiz = await generateQuiz(m.id, opts);
+      setGenProg({ pct: 100, label: 'できました！' });
       setActiveQuiz(quiz);
     } catch {
       setError('問題の生成に失敗しました。少し待って再度お試しください。');
     } finally {
+      clearInterval(iv);
       setQuizzingId(null);
+      setGenProg(null);
     }
   }
 
@@ -70,21 +87,26 @@ export default function Materials() {
     setError(null);
     const list = Array.from(files);
     for (const file of list) {
-      if (file.size > MAX_BYTES) {
-        setError(`「${file.name}」は20MBを超えています。`);
-        continue;
-      }
+      if (file.size > MAX_BYTES) setError(`「${file.name}」は20MBを超えています。`);
     }
+    const valid = list.filter((f) => f.size <= MAX_BYTES);
+    if (valid.length === 0) return;
     setBusy(true);
     try {
-      for (const file of list) {
-        if (file.size > MAX_BYTES) continue;
-        await uploadMaterial(user.uid, subject, file);
+      for (let i = 0; i < valid.length; i++) {
+        const file = valid[i];
+        setUpProg({ pct: (i / valid.length) * 100, name: file.name });
+        // 複数ファイルのときは全体を通した進捗率にする
+        await uploadMaterial(user.uid, subject, file, (p) =>
+          setUpProg({ pct: ((i + p / 100) / valid.length) * 100, name: file.name }),
+        );
       }
+      setUpProg({ pct: 100, name: '完了' });
     } catch {
       setError('アップロードに失敗しました。通信環境を確認してください。');
     } finally {
       setBusy(false);
+      setUpProg(null);
       if (inputRef.current) inputRef.current.value = '';
     }
   }
@@ -98,19 +120,25 @@ export default function Materials() {
       </header>
 
       <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-28">
-        {/* 科目セレクター */}
+        {/* 科目セレクター（教科カラー） */}
         <section className="flex flex-wrap gap-2">
-          {subjects.map((s) => (
-            <button
-              key={s}
-              onClick={() => setSubject(s)}
-              className={`rounded-full px-3 py-1.5 text-sm font-bold transition ${
-                subject === s ? 'bg-main text-white shadow-card' : 'bg-white text-main shadow-card'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
+          {subjects.map((s) => {
+            const c = subjectColor(s, profile.subjectColors);
+            return (
+              <button
+                key={s}
+                onClick={() => setSubject(s)}
+                className="rounded-full px-3 py-1.5 text-sm font-bold shadow-card transition"
+                style={
+                  subject === s
+                    ? { backgroundColor: c, color: deepen(c, 0.6) }
+                    : { backgroundColor: 'white', color: deepen(c, 0.45) }
+                }
+              >
+                {s}
+              </button>
+            );
+          })}
         </section>
 
         {/* アップロードエリア */}
@@ -132,6 +160,11 @@ export default function Materials() {
             {busy ? 'アップロード中…' : `${subject}のプリントを追加`}
             <span className="text-xs font-medium text-slate-400">画像・PDF / 最大20MB</span>
           </button>
+          {upProg && (
+            <div className="mt-3">
+              <ProgressBar pct={upProg.pct} label={`⬆️ ${upProg.name}`} />
+            </div>
+          )}
           {error && (
             <p className="mt-3 rounded-[12px] bg-accent/10 px-3 py-2 text-xs font-bold text-accent">
               {error}
@@ -178,13 +211,19 @@ export default function Materials() {
                       🗑
                     </button>
                   </div>
-                  <button
-                    onClick={() => setOptionMaterial(m)}
-                    disabled={quizzingId === m.id}
-                    className="mt-2 w-full rounded-[12px] bg-accent/10 py-2 text-xs font-bold text-accent transition active:scale-95 disabled:opacity-60"
-                  >
-                    {quizzingId === m.id ? '🤖 問題をつくっています…' : '🤖 AIで問題をつくる'}
-                  </button>
+                  {quizzingId === m.id && genProg ? (
+                    <div className="mt-2 rounded-[12px] bg-accent/5 p-3">
+                      <ProgressBar pct={genProg.pct} label={`🤖 ${genProg.label}`} />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setOptionMaterial(m)}
+                      disabled={quizzingId != null}
+                      className="mt-2 w-full rounded-[12px] bg-accent/10 py-2 text-xs font-bold text-accent transition active:scale-95 disabled:opacity-60"
+                    >
+                      🤖 AIで問題をつくる
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
