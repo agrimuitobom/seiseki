@@ -119,40 +119,35 @@ export default function Materials() {
       className="min-h-screen font-sans text-slate-800 transition-colors duration-300"
       style={{ backgroundColor: tint(themeColor, 0.6) }}
     >
-      {/* ヘッダー（選択科目の色のグラデーション） */}
+      {/* ヘッダー（見出し＋科目選択をまとめて、選択科目の色にする） */}
       <header
-        className="rounded-b-[28px] px-5 pb-8 pt-6 transition-colors duration-300"
+        className="rounded-b-[28px] px-5 pb-6 pt-6 transition-colors duration-300"
         style={{
           background: `linear-gradient(135deg, ${deepen(themeColor, 0.15)}, ${themeColor})`,
           color: deepen(themeColor, 0.7),
         }}
       >
         <p className="text-sm/relaxed opacity-80">授業プリント・資料</p>
-        <h1 className="font-display text-xl font-bold">科目ごとに保存しよう 📚</h1>
+        <h1 className="mb-4 font-display text-xl font-bold">科目ごとに保存しよう 📚</h1>
+
+        {/* 科目セレクター（この色ブロックの中に配置） */}
+        <div className="flex flex-wrap gap-2">
+          {subjects.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSubject(s)}
+              className={`rounded-full px-3 py-1.5 text-sm font-bold shadow-card transition ${
+                subject === s ? 'bg-white' : 'bg-white/25'
+              }`}
+              style={subject === s ? { color: deepen(themeColor, 0.55) } : { color: deepen(themeColor, 0.7) }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </header>
 
       <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-28">
-        {/* 科目セレクター（教科カラー） */}
-        <section className="flex flex-wrap gap-2">
-          {subjects.map((s) => {
-            const c = subjectColor(s, profile.subjectColors);
-            return (
-              <button
-                key={s}
-                onClick={() => setSubject(s)}
-                className="rounded-full px-3 py-1.5 text-sm font-bold shadow-card transition"
-                style={
-                  subject === s
-                    ? { backgroundColor: c, color: deepen(c, 0.6) }
-                    : { backgroundColor: 'white', color: deepen(c, 0.45) }
-                }
-              >
-                {s}
-              </button>
-            );
-          })}
-        </section>
-
         {/* アップロードエリア */}
         <section className="rounded-card bg-white p-4 shadow-card">
           <input
