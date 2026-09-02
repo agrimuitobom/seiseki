@@ -98,12 +98,6 @@ export default function Dashboard() {
     target: r.targetScore != null ? pct(r.targetScore, r.maxScore) : null,
   }));
 
-  // サマリー指標（実データから算出）
-  const latest = subjectResults[subjectResults.length - 1];
-  const latestPct = latest ? pct(latest.score, latest.maxScore) : null;
-  const targetPct = latest?.targetScore != null ? pct(latest.targetScore, latest.maxScore) : null;
-  const achieve = latestPct != null && targetPct != null ? Math.round((latestPct / targetPct) * 100) : null;
-
   // 連続記録＆バッジ
   const streak = useMemo(() => calcStreak(studyLogs), [studyLogs]);
   const badges = useMemo(() => calcBadges(studyLogs, assignments), [studyLogs, assignments]);
@@ -130,7 +124,7 @@ export default function Dashboard() {
 
       <main className="mx-auto -mt-5 max-w-md space-y-4 px-4 pb-36">
         {/* サマリーカード */}
-        <section className="grid grid-cols-3 gap-3">
+        <section className="grid grid-cols-2 gap-3">
           <StatCard label="今週の勉強" value={weekHours} unit="h" tone="main" />
           <StatCard
             label="次の提出物"
@@ -139,12 +133,6 @@ export default function Dashboard() {
             }
             unit={nextDueDays != null && nextDueDays > 0 ? '日後' : ''}
             tone="accent"
-          />
-          <StatCard
-            label="目標達成"
-            value={achieve != null ? String(Math.min(achieve, 999)) : '—'}
-            unit={achieve != null ? '%' : ''}
-            tone="success"
           />
         </section>
 
