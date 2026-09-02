@@ -31,7 +31,7 @@ export default function Login() {
           <div className="mx-auto mb-2 grid h-16 w-16 place-items-center rounded-card bg-gradient-to-br from-main to-sky-400 text-3xl shadow-card">
             📘
           </div>
-          <h1 className="font-display text-2xl font-extrabold text-main">Seiseki</h1>
+          <h1 className="font-display text-2xl font-extrabold text-main">UPUP</h1>
           <p className="mt-1 text-sm text-slate-500">成績管理・学習支援アプリ</p>
         </div>
 

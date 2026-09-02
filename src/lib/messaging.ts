@@ -58,7 +58,7 @@ export async function listenForegroundMessages() {
     onMessage(messaging, (payload) => {
       const d = payload.data ?? {};
       if (Notification.permission === 'granted') {
-        new Notification(d.title || 'Seiseki', { body: d.body || '', icon: '/pwa-192x192.png' });
+        new Notification(d.title || 'UPUP', { body: d.body || '', icon: '/pwa-192x192.png' });
       }
     });
   } catch {

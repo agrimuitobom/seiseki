@@ -146,7 +146,7 @@ function chime() {
   }
 }
 
-const APP_TITLE = 'Seiseki｜成績管理・学習支援';
+const APP_TITLE = 'UPUP｜成績管理・学習支援';
 
 export default function Study() {
   const { user } = useAuth();
