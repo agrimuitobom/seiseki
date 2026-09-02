@@ -77,6 +77,15 @@ export default function Materials() {
     if (subjects.length > 0 && !subjects.includes(subject)) setSubject(subjects[0]);
   }, [subjects, subject]);
 
+  // スマホのステータスバー（時刻・電池の並ぶ部分）の色を選択科目に合わせる。
+  // 他画面へ移動したら既定のスカイブルーに戻す。
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const top = deepen(subjectColor(subject, profile.subjectColors), 0.15);
+    meta?.setAttribute('content', top);
+    return () => meta?.setAttribute('content', '#0EA5E9');
+  }, [subject, profile.subjectColors]);
+
   const subjectMaterials = useMemo(
     () => materials.filter((m) => m.subject === subject),
     [materials, subject],
