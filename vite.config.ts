@@ -23,7 +23,7 @@ firebase.initializeApp(${JSON.stringify(firebaseConfig)});
 const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const d = payload.data || {};
-  self.registration.showNotification(d.title || 'Seiseki', {
+  self.registration.showNotification(d.title || 'UPUP', {
     body: d.body || '',
     icon: '/pwa-192x192.png',
     badge: '/pwa-192x192.png',
@@ -73,8 +73,8 @@ self.addEventListener('notificationclick', (e) => {
         injectRegister: 'auto',
         includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
         manifest: {
-          name: 'Seiseki｜成績管理・学習支援',
-          short_name: 'Seiseki',
+          name: 'UPUP｜成績管理・学習支援',
+          short_name: 'UPUP',
           description: '成績の可視化・AI問題・弱点克服・学習タイマーで毎日の勉強を伴走するアプリ',
           lang: 'ja',
           theme_color: '#0EA5E9',

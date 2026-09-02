@@ -379,15 +379,13 @@ function ColorPicker({
   );
 }
 
-/** データ全削除の確認ダイアログ。誤操作防止に「リセット」入力を必須にする。 */
+/** データ全削除の確認ダイアログ。「はい／いいえ」の選択式。 */
 function ResetDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
-  const [confirmText, setConfirmText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canReset = confirmText.trim() === 'リセット';
 
   async function doReset() {
-    if (!canReset || busy) return;
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -429,21 +427,14 @@ function ResetDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
           <li>・フレンド・ランキング・進路アドバイス</li>
           <li>・プロフィール設定（学校・学年・科目・色など）</li>
         </ul>
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-4 text-xs text-slate-500">
           ログインは保持され、削除後は初期設定からやり直しになります。
           <span className="font-bold text-accent">この操作は取り消せません。</span>
         </p>
 
-        <label className="mb-1.5 block text-xs font-bold text-slate-500">
-          確認のため「リセット」と入力してください
-        </label>
-        <input
-          value={confirmText}
-          onChange={(e) => setConfirmText(e.target.value)}
-          disabled={busy}
-          placeholder="リセット"
-          className="mb-4 w-full rounded-[12px] border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-50"
-        />
+        <p className="mb-3 text-center text-sm font-bold text-slate-700">
+          本当にすべてのデータをリセットしますか？
+        </p>
 
         {error && (
           <p className="mb-3 rounded-[12px] bg-accent/10 px-3 py-2 text-xs font-bold text-accent">
@@ -457,14 +448,14 @@ function ResetDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
             disabled={busy}
             className="flex-1 rounded-card bg-slate-100 py-3 text-sm font-bold text-slate-600 transition active:scale-95 disabled:opacity-50"
           >
-            キャンセル
+            いいえ
           </button>
           <button
             onClick={doReset}
-            disabled={!canReset || busy}
-            className="flex-1 rounded-card bg-accent py-3 text-sm font-bold text-white shadow-card transition active:scale-95 disabled:opacity-40"
+            disabled={busy}
+            className="flex-1 rounded-card bg-accent py-3 text-sm font-bold text-white shadow-card transition active:scale-95 disabled:opacity-60"
           >
-            {busy ? '削除中…' : 'すべて削除する'}
+            {busy ? '削除中…' : 'はい、リセットする'}
           </button>
         </div>
       </div>
