@@ -8,6 +8,8 @@ html {
 
 body {
   margin: 0;
+  /* ダブルタップによる拡大を無効化（ピンチズームは viewport 側で抑止） */
+  touch-action: manipulation;
 }
 
 /* ダイヤル式ピッカーのスクロールバーを隠す */

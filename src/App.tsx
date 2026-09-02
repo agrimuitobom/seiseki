@@ -29,7 +29,7 @@ function Loading() {
     <div className="grid min-h-screen place-items-center bg-base font-sans text-main">
       <div className="animate-pulse text-center">
         <div className="mx-auto mb-2 grid h-14 w-14 place-items-center rounded-card bg-gradient-to-br from-main to-sky-400 text-2xl shadow-card">
-          📈
+          📖
         </div>
         <p className="text-sm font-bold">読み込み中…</p>
       </div>

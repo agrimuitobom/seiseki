@@ -42,7 +42,7 @@ export default function Onboarding() {
         {/* ロゴ */}
         <div className="mb-6 text-center">
           <div className="mx-auto mb-2 grid h-16 w-16 place-items-center rounded-card bg-gradient-to-br from-main to-sky-400 text-3xl shadow-card">
-            📈
+            📖
           </div>
           <h1 className="font-display text-2xl font-extrabold text-main">ようこそ UPUP へ</h1>
           <p className="mt-1 text-sm text-slate-500">まずは2ステップで初期設定をしましょう</p>
