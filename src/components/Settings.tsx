@@ -11,12 +11,14 @@ import {
   type SchoolType,
 } from '../lib/profile';
 import { subjectColor, deepen, PASTEL_PALETTE } from '../lib/colors';
+import { resetAllData } from '../lib/reset';
 
 export default function Settings() {
   const { user } = useAuth();
   const { profile, save } = useProfile();
   const [newSubject, setNewSubject] = useState('');
   const [colorTarget, setColorTarget] = useState<string | null>(null);
+  const [showReset, setShowReset] = useState(false);
   const [name, setName] = useState(profile.displayName);
   const [notifMsg, setNotifMsg] = useState<string | null>(null);
   const [notifBusy, setNotifBusy] = useState(false);
@@ -253,14 +255,29 @@ export default function Settings() {
         <section className="rounded-card bg-white p-4 shadow-card">
           <h2 className="mb-1 font-display text-sm font-bold">アカウント</h2>
           <p className="mb-3 truncate text-xs text-slate-400">{user?.email}</p>
-          <button
-            onClick={() => logout()}
-            className="w-full rounded-card bg-slate-100 py-2.5 text-sm font-bold text-slate-600 transition active:scale-95"
-          >
-            ログアウト
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => logout()}
+              className="flex-1 rounded-card bg-slate-100 py-2.5 text-sm font-bold text-slate-600 transition active:scale-95"
+            >
+              ログアウト
+            </button>
+            <button
+              onClick={() => setShowReset(true)}
+              className="flex-1 rounded-card border border-accent bg-accent/10 py-2.5 text-sm font-bold text-accent transition active:scale-95"
+            >
+              データをリセット
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            「データをリセット」は、ログインは保持したまま、すべての学習データを削除します。
+          </p>
         </section>
       </main>
+
+      {showReset && user && (
+        <ResetDialog uid={user.uid} onClose={() => setShowReset(false)} />
+      )}
 
       {colorTarget && (
         <ColorPicker
@@ -357,6 +374,99 @@ function ColorPicker({
         >
           この色にする
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** データ全削除の確認ダイアログ。誤操作防止に「リセット」入力を必須にする。 */
+function ResetDialog({ uid, onClose }: { uid: string; onClose: () => void }) {
+  const [confirmText, setConfirmText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const canReset = confirmText.trim() === 'リセット';
+
+  async function doReset() {
+    if (!canReset || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await resetAllData(uid);
+      // 成功すると users ドキュメントが消え、自動で初期設定画面に切り替わる
+    } catch {
+      setError('リセットに失敗しました。通信環境を確認して、もう一度お試しください。');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-end bg-black/40 sm:place-items-center"
+      onClick={busy ? undefined : onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-t-[24px] bg-white p-5 shadow-card sm:rounded-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-display text-lg font-bold text-accent">⚠️ データをリセット</h2>
+          {!busy && (
+            <button onClick={onClose} aria-label="閉じる" className="text-slate-400">
+              ✕
+            </button>
+          )}
+        </div>
+
+        <p className="text-sm leading-relaxed text-slate-600">
+          以下のデータが<span className="font-bold text-accent">すべて削除</span>されます。
+        </p>
+        <ul className="my-3 space-y-0.5 rounded-[12px] bg-slate-50 p-3 text-xs text-slate-500">
+          <li>・成績・目標の記録</li>
+          <li>・勉強タイマーの記録・連続日数・バッジ</li>
+          <li>・提出物・宿題</li>
+          <li>・アップロードしたプリント / AIで作った問題</li>
+          <li>・弱点ノート</li>
+          <li>・フレンド・ランキング・進路アドバイス</li>
+          <li>・プロフィール設定（学校・学年・科目・色など）</li>
+        </ul>
+        <p className="mb-3 text-xs text-slate-500">
+          ログインは保持され、削除後は初期設定からやり直しになります。
+          <span className="font-bold text-accent">この操作は取り消せません。</span>
+        </p>
+
+        <label className="mb-1.5 block text-xs font-bold text-slate-500">
+          確認のため「リセット」と入力してください
+        </label>
+        <input
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          disabled={busy}
+          placeholder="リセット"
+          className="mb-4 w-full rounded-[12px] border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-50"
+        />
+
+        {error && (
+          <p className="mb-3 rounded-[12px] bg-accent/10 px-3 py-2 text-xs font-bold text-accent">
+            {error}
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 rounded-card bg-slate-100 py-3 text-sm font-bold text-slate-600 transition active:scale-95 disabled:opacity-50"
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={doReset}
+            disabled={!canReset || busy}
+            className="flex-1 rounded-card bg-accent py-3 text-sm font-bold text-white shadow-card transition active:scale-95 disabled:opacity-40"
+          >
+            {busy ? '削除中…' : 'すべて削除する'}
+          </button>
+        </div>
       </div>
     </div>
   );
