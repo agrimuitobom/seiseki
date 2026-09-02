@@ -16,7 +16,7 @@ import {
 } from '../lib/quiz';
 import Quiz from './Quiz';
 import { ProgressBar } from './ProgressBar';
-import { subjectColor, deepen } from '../lib/colors';
+import { subjectColor, deepen, tint } from '../lib/colors';
 
 const ACCEPT = 'image/*,application/pdf';
 const MAX_BYTES = 20 * 1024 * 1024; // 20MB
@@ -111,11 +111,23 @@ export default function Materials() {
     }
   }
 
+  // 選択中の科目の色で画面全体をやさしく色付け
+  const themeColor = subjectColor(subject, profile.subjectColors);
+
   return (
-    <div className="min-h-screen bg-base font-sans text-slate-800">
-      {/* ヘッダー */}
-      <header className="rounded-b-[28px] bg-gradient-to-br from-main to-sky-400 px-5 pb-8 pt-6 text-white">
-        <p className="text-sm/relaxed opacity-90">授業プリント・資料</p>
+    <div
+      className="min-h-screen font-sans text-slate-800 transition-colors duration-300"
+      style={{ backgroundColor: tint(themeColor, 0.6) }}
+    >
+      {/* ヘッダー（選択科目の色のグラデーション） */}
+      <header
+        className="rounded-b-[28px] px-5 pb-8 pt-6 transition-colors duration-300"
+        style={{
+          background: `linear-gradient(135deg, ${deepen(themeColor, 0.15)}, ${themeColor})`,
+          color: deepen(themeColor, 0.7),
+        }}
+      >
+        <p className="text-sm/relaxed opacity-80">授業プリント・資料</p>
         <h1 className="font-display text-xl font-bold">科目ごとに保存しよう 📚</h1>
       </header>
 

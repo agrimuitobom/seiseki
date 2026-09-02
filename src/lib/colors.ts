@@ -46,3 +46,15 @@ export function deepen(hex: string, amount = 0.5): string {
   const to = (v: number) => v.toString(16).padStart(2, '0');
   return `#${to(f(0))}${to(f(2))}${to(f(4))}`;
 }
+
+/** 色を白に近づける（淡い背景用）。amount: 0=そのまま 〜 1=白 */
+export function tint(hex: string, amount = 0.55): string {
+  const n = hex.replace('#', '');
+  if (n.length !== 6) return '#F0F9FF';
+  const f = (i: number) => {
+    const v = parseInt(n.slice(i, i + 2), 16);
+    return Math.round(v + (255 - v) * amount);
+  };
+  const to = (v: number) => v.toString(16).padStart(2, '0');
+  return `#${to(f(0))}${to(f(2))}${to(f(4))}`;
+}

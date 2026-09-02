@@ -32,7 +32,7 @@ type Phase = 'work' | 'break';
 const MODES: { id: TimerMode; label: string; emoji: string }[] = [
   { id: 'stopwatch', label: 'ストップウォッチ', emoji: '⏱️' },
   { id: 'countdown', label: 'タイマー', emoji: '⏳' },
-  { id: 'pomodoro', label: 'ポモドーロ', emoji: '🍅' },
+  { id: 'pomodoro', label: 'ポモドーロ', emoji: '☕' },
 ];
 
 // ポモドーロの「作業/休憩」プリセット（分）
